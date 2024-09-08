@@ -1,0 +1,16 @@
+[package]
+name = "rupyengine"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+pyo3 = { version = "0.21.2", features = ["extension-module", "auto-initialize"] }
+
+[lib]
+name = "rupyengine"
+crate-type = ["cdylib", "rlib"]  
+
+[[bin]]
+name = "main"  
+path = "src/main.rs"
+
