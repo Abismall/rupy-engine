@@ -1,6 +1,6 @@
 
 from enum import Enum
-from py.Error.base import StatusText, create_error
+from Error.base import StatusText, create_error
 from typing import Any
 
 # Enum to define Python types for type matching

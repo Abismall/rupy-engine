@@ -14,5 +14,5 @@ class StatusText(Enum):
     RUNTIME_ERROR = "[RuntimeError]"
 
 
-def create_error(status: StatusText, message: str = GenericErrorMessage, trace: bool = True):
-    return "{status}:{message}\n".format(status, message).join(Trace() if trace else "")
+def create_error(status: StatusText = StatusText.UNKNOWN_ERROR.value, message: str = GenericErrorMessage, trace: bool = True):
+    return "\n".join([f"{status}:{message}\n".format(status, message), Trace().source_lines if trace else ""])

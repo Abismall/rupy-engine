@@ -1,6 +1,6 @@
 import os
 from Error.base import StatusText, create_error
-import validation
+from .validation import match_type_or_raise_exception
 
 
 class FilePath:
@@ -15,7 +15,7 @@ class FilePath:
         Returns:
             bool: True if the path exists, False otherwise.
         """
-        validation.match_type_or_raise_exception("string", file_path)
+        match_type_or_raise_exception("string", file_path)
         try:
             return os.path.exists(file_path)
         except Exception as exec:
@@ -50,7 +50,7 @@ class FilePath:
             TypeError: If the `paths_list` is not a list.
             RuntimeError: If an error occurs while creating the directory.
         """
-        validation.match_type_or_raise_exception(
+        match_type_or_raise_exception(
             to_mach="array", to_check=paths_list)
         for path in paths_list:
             FilePath._create_if_not_exists(file_path_arg=path)
@@ -66,7 +66,7 @@ class FilePath:
         Raises:
             RuntimeError: If an error occurs while creating the directory.
         """
-        validation.match_type_or_raise_exception(
+        match_type_or_raise_exception(
             to_mach="string", to_check=file_path_arg)
         directory = os.path.dirname(file_path_arg) if os.path.isfile(
             file_path_arg) else file_path_arg

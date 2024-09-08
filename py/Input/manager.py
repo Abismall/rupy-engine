@@ -1,20 +1,23 @@
 
 from typing import Optional
-from .handlers import KeyboardHandler, MouseHandler
+from .interfaces import InputListenerKeyboardInterface, InputListenerMouseInterface
+from .handlers import WinNativeKeyboardHandler, WinNativeMouseHandler
 
 
 class InputManager:
-    default_mouse = MouseHandler
-    default_keyboard = KeyboardHandler
+    default_mouse = WinNativeMouseHandler
+    default_keyboard = WinNativeKeyboardHandler
 
-    def __init__(self, mouse: Optional[MouseHandler] = None, keyboard: Optional[KeyboardHandler] = None):
+    def __init__(self, mouse: Optional[InputListenerKeyboardInterface] = None, keyboard: Optional[InputListenerMouseInterface] = None):
         """
         Initializes the input manager with mouse and keyboard handlers.
         """
-        self.mouse_handler: MouseHandler = mouse if isinstance(
-            mouse, MouseHandler) else self.default_mouse()
-        self.keyboard_handler: KeyboardHandler = keyboard if isinstance(
-            keyboard, KeyboardHandler) else self.default_keyboard()
+        print(isinstance(
+            mouse, InputListenerMouseInterface))
+        self.mouse_handler: InputListenerMouseInterface = mouse if isinstance(
+            mouse, InputListenerMouseInterface) else self.default_mouse()
+        self.keyboard_handler: InputListenerKeyboardInterface = keyboard if isinstance(
+            keyboard, InputListenerKeyboardInterface) else self.default_keyboard()
 
     def update(self):
         """
