@@ -3,16 +3,15 @@
 import os
 from Application import App
 from Application.signal import SignalBus
-from Utils.log import Logger
-from Utils.environment import EnvManager
 from Input import InputManager, WinNativeKeyboardHandler, WinNativeMouseHandler
+from Utils.environment import EnvManager
 
 
 def main():
-
-    EnvManager.set_env_from_file(os.path.join(os.getcwd(), "py", ".env"))
-    app = App(logger=Logger('RupyLogger').get_file_logger(), signal_bus=SignalBus(), input_manager=InputManager(
-        mouse=WinNativeKeyboardHandler(), keyboard=WinNativeMouseHandler()))
+    env_file_path = os.path.join(os.getcwd(), "py", ".env")
+    EnvManager.set_env_from_file(env_file_path)
+    app = App(env_file=env_file_path, logger="console", signal_bus=SignalBus(), input_manager=InputManager(
+        mouse=WinNativeKeyboardHandler(), keyboard=WinNativeMouseHandler(), pressed_only_mode=True))
 
     app.start()
 

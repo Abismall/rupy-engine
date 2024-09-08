@@ -8,14 +8,22 @@ class InputManager:
     default_mouse = WinNativeMouseHandler
     default_keyboard = WinNativeKeyboardHandler
 
-    def __init__(self, mouse: Optional[InputListenerKeyboardInterface] = None, keyboard: Optional[InputListenerMouseInterface] = None):
-        """
-        Initializes the input manager with mouse and keyboard handlers.
-        """
-        self.mouse_handler: InputListenerMouseInterface = mouse if isinstance(
-            mouse, InputListenerMouseInterface) else self.default_mouse()
-        self.keyboard_handler: InputListenerKeyboardInterface = keyboard if isinstance(
-            keyboard, InputListenerKeyboardInterface) else self.default_keyboard()
+    def __init__(
+        self,
+        mouse: Optional[InputListenerMouseInterface] = None,
+        keyboard: Optional[InputListenerKeyboardInterface] = None,
+        pressed_only_mode: bool = False,
+    ):
+
+        self.mouse_handler: InputListenerMouseInterface = (
+            mouse if isinstance(
+                mouse, InputListenerMouseInterface) else self.default_mouse()
+        )
+        self.keyboard_handler: InputListenerKeyboardInterface = (
+            keyboard if isinstance(
+                keyboard, InputListenerKeyboardInterface) else self.default_keyboard()
+        )
+        self.pressed_only_mode = pressed_only_mode
 
     def update(self):
         """
@@ -26,14 +34,24 @@ class InputManager:
 
     def get_state(self):
         """
-        Updates the state of the mouse and keyboard handlers.
-        """
-        return {
-            "mouse": self.mouse_handler.get_state(),
-            "keyboard":  self.keyboard_handler.get_state()
-        }
+        Gets the current state of the mouse and keyboard handlers.
 
+        :return: A dictionary containing the state of the mouse and keyboard.
+        """
+        mouse_state = self.mouse_handler.get_state()
+        keyboard_state = self.keyboard_handler.get_state()
+
+        # If pressed_only_mode is enabled, filter the keyboard state to include only pressed keys
+        if self.pressed_only_mode:
+            keyboard_state = {
+                key: state for key, state in keyboard_state.items() if state == True}
+
+        return {
+            "mouse": mouse_state,
+            "keyboard": keyboard_state,
+        }
     # Mouse-related methods
+
     def get_mouse_position(self):
         """
         Gets the current position of the mouse.
