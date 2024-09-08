@@ -12,8 +12,6 @@ class InputManager:
         """
         Initializes the input manager with mouse and keyboard handlers.
         """
-        print(isinstance(
-            mouse, InputListenerMouseInterface))
         self.mouse_handler: InputListenerMouseInterface = mouse if isinstance(
             mouse, InputListenerMouseInterface) else self.default_mouse()
         self.keyboard_handler: InputListenerKeyboardInterface = keyboard if isinstance(

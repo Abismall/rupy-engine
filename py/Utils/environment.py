@@ -2,66 +2,60 @@ import os
 from typing import Any, Dict
 from dotenv import load_dotenv
 
+from Error.base import StatusText, create_error
 
-class SetEnvironment:
+
+class EnvManager:
     """Class to manage environment variables from different sources."""
 
     @staticmethod
     def _verify_path_is_string(path: Any):
-        """Verifies that the provided path is a string."""
         if not isinstance(path, str):
-            raise TypeError(f"Expected a string for path, but got {
-                            type(path).__name__}")
+            raise TypeError(create_error(status=StatusText.TYPE_ERROR,
+                            message=f"Expected a string for path, but got {type(path).__name__}"))
+
+    def os_getenv(env_key: str):
+        if not env_key or not isinstance(env_key, str):
+            raise TypeError(create_error(status=StatusText.TYPE_ERROR, message=f"Expected a string for env key, but got {
+                type(env_key).__name__}"))
+        else:
+            return os.getenv(env_key.upper())
 
     @staticmethod
     def load_env(file_path: str):
-        """
-        Loads environment variables from the specified file path.
 
-        Args:
-            file_path (str): The path to the .env file.
-        """
-        SetEnvironment._verify_path_is_string(file_path)
+        EnvManager._verify_path_is_string(file_path)
         try:
             load_dotenv(file_path)
-            print(f"Loaded environment variables from {file_path}")
         except Exception as e:
-            print(f"Error: Failed to load environment variables from {
-                  file_path}. Details: {e}")
+            raise ValueError(create_error(status=StatusText.VALUE_ERROR,
+                             message=f"Error: Failed to load environment variables from {file_path}.")) from e
 
     @staticmethod
-    def from_file(env_path: str = ".env"):
-        """
-        Loads environment variables from a .env file.
+    def set_env_from_file(env_path: str = ".env"):
 
-        Args:
-            env_path (str): The path to the .env file. Default is ".env".
-        """
-        SetEnvironment._verify_path_is_string(env_path)
+        EnvManager._verify_path_is_string(env_path)
         if os.path.exists(env_path):
             load_dotenv(env_path)
-            print(f"Loaded environment variables from {env_path}")
         else:
-            print(f"Warning: {env_path} file not found.")
+            raise ValueError(create_error(
+                status=StatusText.VALUE_ERROR, message=f"Warning: {env_path} file not found."))
 
     @staticmethod
-    def from_dict(env_dict: Dict[str, str]):
-        """
-        Sets environment variables from a dictionary.
-
-        Args:
-            env_dict (Dict[str, str]): A dictionary of environment variables to set.
-        """
+    def set_env_from_dict(env_dict: Dict[str, str]):
         if not isinstance(env_dict, dict):
-            raise TypeError(f"Expected a dictionary for environment variables, but got {
-                            type(env_dict).__name__}")
+            raise TypeError(create_error(status=StatusText.VALUE_ERROR,
+                            message=f"Expected a dictionary for environment variables, but got {
+                                type(env_dict).__name__}"))
 
-        for key, value in env_dict.items():
-            if not isinstance(key, str) or not isinstance(value, str):
-                raise TypeError(
-                    f"Environment keys and values must be strings. Got: {key}={value}")
-            os.environ[key] = value
-            print(f"Set environment variable {key}.")
+        else:
+            for key, value in env_dict.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    raise TypeError(
+                        create_error(status=StatusText.VALUE_ERROR,
+                                     message=f"Environment keys and values must be strings. Got: {key}={value}"))
+                else:
+                    os.environ[key] = value
 
 
 # def init_environment():

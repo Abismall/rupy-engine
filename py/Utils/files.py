@@ -18,11 +18,15 @@ class FilePath:
         match_type_or_raise_exception("string", file_path)
         try:
             return os.path.exists(file_path)
-        except Exception as exec:
+        except Exception as e:
             raise RuntimeError(
-                status=StatusText.RUNTIME_ERROR.value,
-                message=(str(exec) or None),
-            )
+                create_error(
+                    status=StatusText.RUNTIME_ERROR.value,
+                    message=f"Error: An exception occurred while checking if the path '{
+                        file_path}' exists.",
+                    trace=True
+                )
+            ) from e
 
     @staticmethod
     def create_path_if_not_exists(path_string: str):
@@ -73,11 +77,15 @@ class FilePath:
         if not FilePath.path_exists(directory):
             try:
                 os.makedirs(directory, exist_ok=True)
-            except Exception as exec:
-                raise RuntimeError(create_error(
-                    status=StatusText.RUNTIME_ERROR.value,
-                    message=str(exec) or None,
-                ))
+            except Exception as e:
+                raise RuntimeError(
+                    create_error(
+                        status=StatusText.RUNTIME_ERROR.value,
+                        message=f"Error: An exception occurred while trying to create the directory '{
+                            directory}'",
+                        trace=True
+                    )
+                ) from e
 
 
 # def get_file_suffix(file_path: str):

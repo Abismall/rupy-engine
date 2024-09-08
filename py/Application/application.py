@@ -2,9 +2,8 @@
 import logging
 import time
 from typing import Any, Optional
-import pygame
 from Input.manager import InputManager
-from Error.base import StatusText, create_error
+from Utils.validation import is_key_of
 from .signal import SignalBus, Signals
 
 
@@ -30,7 +29,10 @@ class App:
     def init(self):
         """Initializes the engine and game resources."""
         self.publish_signal(Signals.APP_INIT)
-        pygame.init()
+        if is_key_of("pygame", globals()):
+            pygame_module = globals().get("pygame", None)
+            if pygame_module and hasattr("init", pygame_module) and callable(pygame_module.init):
+                pygame_module.init()
 
     def run(self):
         """Main loop of the engine."""
@@ -49,9 +51,9 @@ class App:
 
         captured_inputs = self.inputs.get_state()
         self.publish_signal(
-            Signals.INPUT_UPDATE_MOUSE, captured_inputs.get("keyboard", self.inputs.keyboard_handler.initial_state))
+            Signals.INPUT_UPDATE_BUTTONS, captured_inputs.get("keyboard", self.inputs.keyboard_handler.initial_state))
         self.publish_signal(
-            Signals.INPUT_UPDATE_BUTTONS, captured_inputs.get("mouse", self.inputs.mouse_handler.initial_state))
+            Signals.INPUT_UPDATE_MOUSE, captured_inputs.get("mouse", self.inputs.mouse_handler.initial_state))
 
         self.publish_signal(Signals.INPUT_UPDATE_END)
 

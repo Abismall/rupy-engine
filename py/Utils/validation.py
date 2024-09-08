@@ -18,16 +18,9 @@ class PythonTypeEnum(Enum):
     none = type(None)
 
 
-def is_defined_local(var_name: str) -> bool:
-    """Checks if a variable is defined in the local scope."""
-    local_vars = locals()
-    return var_name in local_vars
-
-
-def is_defined_global(var_name: str) -> bool:
+def is_key_of(var_name: str, mapping: dict[str, Any]) -> bool:
     """Checks if a variable is defined in the global scope."""
-    global_vars = globals()
-    return var_name in global_vars
+    return var_name in mapping
 
 
 def is_not_none(var: Any) -> bool:
@@ -85,11 +78,12 @@ def match_type_or_raise_exception(to_match: str, to_evaluate: Any) -> bool:
             raise TypeError(create_error(
                 status=StatusText.TYPE_ERROR.value,
                 message=f"Expected type '{type(to_match).__name__}', but received '{type(to_evaluate).__name__}'"))
-    except Exception as fatal_err:
+    except Exception as e:
         raise RuntimeError(create_error(
             status=StatusText.RUNTIME_ERROR.value,
-            message=str(fatal_err) or None
-        ))
+            message=f"Warning: unknown exception caught when matching types for '{
+                type(to_match).__name__}', '{type(to_evaluate).__name__}'"
+        )) from e
 
 
 def is_callable(method: Any) -> bool:

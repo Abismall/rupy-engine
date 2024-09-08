@@ -1,18 +1,24 @@
 import ctypes
 from typing import Dict, Tuple
-import pygame
-from .interfaces import InputListenerBaseInterface, InputListenerKeyboardInterface, InputListenerMouseInterface
+
+from Utils.validation import is_key_of
+from .interfaces import InputListenerKeyboardInterface, InputListenerMouseInterface
 
 
-class KeyboardHandler(InputListenerKeyboardInterface):
-    initial_state = {}
-
+class PygameKeyboardHandler(InputListenerKeyboardInterface):
     def __init__(self):
         """
         Initializes the keyboard handler to keep track of key states.
         """
         super().__init__()
-        self.state = KeyboardHandler.initial_state
+        self.state = InputListenerKeyboardInterface.initial_state
+        if not is_key_of("pygame", globals()):
+            try:
+                global pygame
+                import pygame
+            except ImportError as e:
+                raise ImportError(
+                    "Pygame is required for this handler.") from e
 
     def update(self):
         """
@@ -36,28 +42,21 @@ class KeyboardHandler(InputListenerKeyboardInterface):
         return self.state.get(key, False)
 
 
-class MouseHandler(InputListenerMouseInterface):
-    """
-    Handles mouse input, capturing mouse movements and button states.
-    """
-    initial_state = {
-        "pos_x": 0,
-        "pos_y": 0,
-        "left_click": False,
-        "right_click": False
-    }
-
+class PygameMouseHandler(InputListenerMouseInterface):
     def __init__(self):
-        """
-        Initializes the mouse handler to keep track of mouse clicks and positions.
-        """
+
         super().__init__()
-        self.state = MouseHandler.initial_state
+        self.state = InputListenerMouseInterface.initial_state
+        if not is_key_of("pygame", globals()):
+            try:
+                global pygame
+                import pygame
+            except ImportError as e:
+                raise ImportError(
+                    "Pygame is required for this handler.") from e
 
     def update(self):
-        """
-        Updates the mouse state including position and click status.
-        """
+
         mouse_pos = pygame.mouse.get_pos()
         mouse_buttons = pygame.mouse.get_pressed()
 
@@ -72,27 +71,15 @@ class MouseHandler(InputListenerMouseInterface):
         return self.state
 
     def is_left_clicked(self):
-        """
-        Checks if the left mouse button is clicked.
 
-        :return: True if the left mouse button is clicked, otherwise False.
-        """
         return self.state.get('left_click', False)
 
     def is_right_clicked(self):
-        """
-        Checks if the right mouse button is clicked.
 
-        :return: True if the right mouse button is clicked, otherwise False.
-        """
         return self.state.get('right_click', False)
 
     def get_position(self):
-        """
-        Gets the current position of the mouse.
 
-        :return: Tuple (x, y) representing the mouse position.
-        """
         return {"pos_x": self.state.get("pos_x", 0), "pos_y": self.state.get("pos_y", 0)}
 
 
@@ -260,12 +247,7 @@ class WinNativeMouseHandler(InputListenerMouseInterface):
     """
     Handles mouse input for Windows using native API calls.
     """
-    initial_state = {
-        "pos_x": 0,
-        "pos_y": 0,
-        "left_click": False,
-        "right_click": False
-    }
+    initial_state = InputListenerMouseInterface.initial_state
 
     def __init__(self):
         """

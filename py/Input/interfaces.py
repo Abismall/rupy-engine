@@ -21,6 +21,12 @@ class InputListenerMouseInterface(InputListenerBaseInterface):
     """
     Interface for input listeners. Defines methods to update and get the states of mouse and keyboard inputs.
     """
+    initial_state = {
+        "pos_x": 0,
+        "pos_y": 0,
+        "left_click": False,
+        "right_click": False
+    }
 
     def is_left_clicked(self):
         """
@@ -51,6 +57,8 @@ class InputListenerMouseInterface(InputListenerBaseInterface):
 
 
 class InputListenerKeyboardInterface(InputListenerBaseInterface):
+    initial_state = {}
+
     def is_key_pressed(self, key):
         """
         Checks if a specific key is currently pressed.
