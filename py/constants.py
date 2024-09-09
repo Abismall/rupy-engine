@@ -2,7 +2,7 @@
 # PROJECT CONFIGURATION
 # ========================
 PYENGINE = "rupyengine"
-PYPROJECT = "pyproject.toml"
+PYPROJECT = "Python.toml"
 PYPROJECT_TOOL = "tool"
 
 # ========================
