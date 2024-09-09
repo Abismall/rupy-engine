@@ -2,7 +2,7 @@ from enum import Enum
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Any
-from Error.base import StatusText, create_error
+from Error.base import Status, create_error
 from Utils.environment import EnvManager
 
 
@@ -61,13 +61,16 @@ class LogFormat(Enum):
         name = name.upper()
         name_to_format = cls.name_to_format()
         if name not in name_to_format:
-            raise ValueError(f"Invalid log format name: {name}. Must be one of {
-                             list(name_to_format.keys())}.")
+            raise ValueError(create_error(
+                status=Status.ValueError,
+                details=f"Invalid log format name: {
+                    name}. Must be one of {list(name_to_format.keys())}."
+            ))
         return name_to_format[name]
 
 
 class Logger:
-    def __init__(self, name: None, log_file: str = None, log_level=None, log_format=None):
+    def __init__(self, name: str = None, log_file: str = None, log_level=None, log_format=None):
         """
         Initializes the custom logger with separate loggers for console and file.
 
@@ -77,18 +80,32 @@ class Logger:
             log_level (int): The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
             log_format (LogFormat): The format of the log messages.
         """
-        self.name = self._get_arg_or_env('name', name, str)
-        self.log_file = self._get_arg_or_env('log_file', log_file, str)
+        self.name = name if isinstance(name, str) else 'RupyLogger'
+        self.log_file = self._get_arg_or_env(
+            'LOGGING_FILE_PATH', log_file, str)
         self.log_level = self._get_arg_or_env(
-            'log_level', log_level, self._validate_log_level)
+            'LOGGING_LEVEL', log_level, self._validate_log_level)
         self.log_format = self._get_arg_or_env(
-            'log_format', log_format, self._validate_log_format)
+            'LOGGING_FORMAT', log_format, self._validate_log_format)
 
         self.console_logger = self._create_console_logger()
         self.file_logger = self._create_file_logger()
 
     def _get_arg_or_env(self, arg_name, arg_value, validation_func):
+        """
+        Retrieves an argument value or fetches it from the environment if not provided.
 
+        Args:
+            arg_name (str): The name of the argument or environment variable.
+            arg_value (Any): The value of the argument, if provided.
+            validation_func (callable): A function to validate the argument value.
+
+        Returns:
+            Any: The validated argument value.
+
+        Raises:
+            ValueError: If the value is missing or invalid.
+        """
         if arg_value is not None:
             return validation_func(arg_value)
 
@@ -96,11 +113,25 @@ class Logger:
         if env_value is not None:
             return validation_func(env_value)
 
-        raise ValueError(
-            f"'{arg_name}' must be provided either as an argument or an environment variable.")
+        raise ValueError(create_error(
+            status=Status.ValueError,
+            details=f"'{
+                arg_name}' must be provided either as an argument or an environment variable."
+        ))
 
     def _validate_log_level(self, log_level):
+        """
+        Validates the logging level.
 
+        Args:
+            log_level (Any): The logging level to validate.
+
+        Returns:
+            int: The validated logging level.
+
+        Raises:
+            ValueError: If the logging level is invalid.
+        """
         if isinstance(log_level, int):
             if log_level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]:
                 return log_level
@@ -109,30 +140,45 @@ class Logger:
             if log_level in logging._nameToLevel:
                 return logging._nameToLevel[log_level]
 
+        raise ValueError(create_error(
+            status=Status.ValueError,
+            details=f"Invalid log level: {log_level}. Must be one of {
+                ', '.join(logging._nameToLevel.keys())}."
+        ))
+
     def _validate_log_format(self, log_format):
+        """
+        Validates the logging format.
+
+        Args:
+            log_format (Any): The log format to validate.
+
+        Returns:
+            LogFormat: The validated log format.
+
+        Raises:
+            ValueError: If the log format is invalid.
+        """
         if isinstance(log_format, LogFormat):
             return log_format
         elif isinstance(log_format, str):
             log_format = log_format.upper()
             if log_format in LogFormat.__members__:
                 return LogFormat[log_format]
-        raise ValueError(f"Invalid log format: {log_format}. Must be one of {
-            ', '.join(LogFormat.__members__.keys())}.")
 
-    def _has_existing_handler(self):
-        if hasattr(self, "console_logger"):
-            if (isinstance(self.console_logger, logging.StreamHandler) or isinstance(self.console_logger, RotatingFileHandler)):
-                if hasattr(self.console_logger, 'hasHandlers') and callable(self.console_logger.hasHandlers):
-                    return self.console_logger.hasHandlers()
-                raise ValueError(create_error(status=StatusText.RUNTIME_ERROR.value,
-                                 message="Logger is missing method 'hasHandlers' or method is not callable"))
-            else:
-                raise
-        else:
-            raise
+        raise ValueError(create_error(
+            status=Status.ValueError,
+            details=f"Invalid log format: {log_format}. Must be one of {
+                ', '.join(LogFormat.__members__.keys())}."
+        ))
 
     def _create_console_logger(self) -> logging.Logger:
+        """
+        Creates and configures the console logger.
 
+        Returns:
+            logging.Logger: The configured console logger.
+        """
         console_logger = logging.getLogger(f"{self.name}_console")
         console_logger.setLevel(self.log_level)
 
@@ -147,6 +193,12 @@ class Logger:
         return console_logger
 
     def _create_file_logger(self) -> logging.Logger:
+        """
+        Creates and configures the file logger.
+
+        Returns:
+            logging.Logger: The configured file logger.
+        """
         file_logger = logging.getLogger(f"{self.name}_file")
         file_logger.setLevel(self.log_level)
 
@@ -156,19 +208,24 @@ class Logger:
         )
         file_handler.setLevel(self.log_level)
         file_handler.setFormatter(formatter)
+
         if not file_logger.hasHandlers():
             file_logger.addHandler(file_handler)
 
         return file_logger
 
     def log_to_console(self, level: int, message: str):
+        """Logs a message to the console logger."""
         self.console_logger.log(level, message)
 
     def log_to_file(self, level: int, message: str):
+        """Logs a message to the file logger."""
         self.file_logger.log(level, message)
 
     def get_console_logger(self):
+        """Returns the console logger."""
         return self.console_logger
 
     def get_file_logger(self):
+        """Returns the file logger."""
         return self.file_logger

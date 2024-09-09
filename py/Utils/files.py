@@ -1,5 +1,5 @@
 import os
-from Error.base import StatusText, create_error
+from Error.base import Status, create_error
 from .validation import match_type_or_raise_exception
 
 
@@ -14,15 +14,18 @@ class FilePath:
 
         Returns:
             bool: True if the path exists, False otherwise.
+
+        Raises:
+            RuntimeError: If an error occurs while checking the path.
         """
-        match_type_or_raise_exception("string", file_path)
+        match_type_or_raise_exception("String", file_path)
         try:
             return os.path.exists(file_path)
         except Exception as e:
             raise RuntimeError(
                 create_error(
-                    status=StatusText.RUNTIME_ERROR.value,
-                    message=f"Error: An exception occurred while checking if the path '{
+                    status=Status.RuntimeError,
+                    details=f"An exception occurred while checking if the path '{
                         file_path}' exists.",
                     trace=True
                 )
@@ -40,7 +43,7 @@ class FilePath:
             TypeError: If the `path_string` is not a string.
             RuntimeError: If an error occurs while creating the directory.
         """
-        return FilePath._create_if_not_exists(file_path_arg=path_string)
+        FilePath._create_if_not_exists(file_path_arg=path_string)
 
     @staticmethod
     def create_non_existing_paths(paths_list: list[str]):
@@ -51,11 +54,11 @@ class FilePath:
             paths_list (list[str]): List of paths to the directories or files.
 
         Raises:
-            TypeError: If the `paths_list` is not a list.
+            ValueError: If the `paths_list` is not a list.
             RuntimeError: If an error occurs while creating the directory.
         """
         match_type_or_raise_exception(
-            to_mach="array", to_check=paths_list)
+            to_match="List", to_evaluate=paths_list)
         for path in paths_list:
             FilePath._create_if_not_exists(file_path_arg=path)
 
@@ -71,7 +74,7 @@ class FilePath:
             RuntimeError: If an error occurs while creating the directory.
         """
         match_type_or_raise_exception(
-            to_mach="string", to_check=file_path_arg)
+            to_match="String", to_evaluate=file_path_arg)
         directory = os.path.dirname(file_path_arg) if os.path.isfile(
             file_path_arg) else file_path_arg
         if not FilePath.path_exists(directory):
@@ -80,9 +83,9 @@ class FilePath:
             except Exception as e:
                 raise RuntimeError(
                     create_error(
-                        status=StatusText.RUNTIME_ERROR.value,
-                        message=f"Error: An exception occurred while trying to create the directory '{
-                            directory}'",
+                        status=Status.RuntimeError,
+                        details=f"An exception occurred while trying to create the directory '{
+                            directory}'.",
                         trace=True
                     )
                 ) from e

@@ -1,8 +1,8 @@
 import os
 from typing import Any, Dict
 from dotenv import dotenv_values, load_dotenv, set_key
-
-from Error.base import StatusText, create_error
+from Error.base import Status, create_error
+from .validation import match_type_or_raise_exception
 
 
 class EnvManager:
@@ -10,17 +10,33 @@ class EnvManager:
 
     @staticmethod
     def _verify_path_is_string(path: Any):
-        if not isinstance(path, str):
-            raise TypeError(create_error(status=StatusText.TYPE_ERROR,
-                                         message=f"Expected a string for path, but got {type(path).__name__}"))
+        """
+        Verifies that the provided path is a string.
+
+        Args:
+            path (Any): The path to verify.
+
+        Raises:
+            TypeError: If the path is not a string.
+        """
+        match_type_or_raise_exception("String", path)
 
     @staticmethod
     def os_getenv(env_key: str):
-        if not env_key or not isinstance(env_key, str):
-            raise TypeError(create_error(status=StatusText.TYPE_ERROR,
-                                         message=f"Expected a string for env key, but got {type(env_key).__name__}"))
-        else:
-            return os.getenv(env_key.upper())
+        """
+        Retrieves an environment variable by key.
+
+        Args:
+            env_key (str): The environment variable key.
+
+        Returns:
+            str: The value of the environment variable.
+
+        Raises:
+            TypeError: If the key is not a string.
+        """
+        match_type_or_raise_exception("String", env_key)
+        return os.getenv(env_key.upper())
 
     @staticmethod
     def set_env_keys(env_file_path: str, new_entries: Dict[str, Any]):
@@ -30,12 +46,13 @@ class EnvManager:
         Args:
             env_file_path (str): The path to the .env file.
             new_entries (dict): A dictionary of environment variable names and their new values.
+
+        Raises:
+            TypeError: If the `env_file_path` is not a string or `new_entries` is not a dictionary.
+            RuntimeError: If an error occurs while setting the environment variables.
         """
         EnvManager._verify_path_is_string(env_file_path)
-
-        if not isinstance(new_entries, dict):
-            raise TypeError(create_error(status=StatusText.VALUE_ERROR,
-                                         message="Expected a dictionary for environment entries."))
+        match_type_or_raise_exception("Dict", new_entries)
 
         try:
             for key, entry in new_entries.items():
@@ -43,39 +60,72 @@ class EnvManager:
                 if new_value != os.getenv(key):
                     set_key(env_file_path, key, new_value)
         except Exception as e:
-            raise RuntimeError(create_error(status=StatusText.RUNTIME_ERROR,
-                                            message="Error: Failed to save environment variables.")) from e
+            raise RuntimeError(create_error(
+                status=Status.RuntimeError,
+                details="Failed to save environment variables.",
+                trace=True
+            )) from e
 
     @staticmethod
     def load_env(file_path: str):
+        """
+        Loads environment variables from the specified .env file.
+
+        Args:
+            file_path (str): The path to the .env file.
+
+        Raises:
+            ValueError: If an error occurs while loading the environment variables.
+        """
         EnvManager._verify_path_is_string(file_path)
         try:
             load_dotenv(file_path)
         except Exception as e:
-            raise ValueError(create_error(status=StatusText.VALUE_ERROR,
-                                          message=f"Error: Failed to load environment variables from {file_path}.")) from e
+            raise ValueError(create_error(
+                status=Status.ValueError,
+                details=f"Failed to load environment variables from {
+                    file_path}.",
+                trace=True
+            )) from e
 
     @staticmethod
     def set_env_from_file(env_path: str = ".env"):
+        """
+        Loads environment variables from a specified file.
+
+        Args:
+            env_path (str): The path to the .env file.
+
+        Raises:
+            ValueError: If the .env file does not exist.
+        """
         EnvManager._verify_path_is_string(env_path)
         if os.path.exists(env_path):
             load_dotenv(env_path)
         else:
-            raise ValueError(create_error(status=StatusText.VALUE_ERROR,
-                                          message=f"Warning: {env_path} file not found."))
+            raise ValueError(create_error(
+                status=Status.ValueError,
+                details=f"{env_path} file not found.",
+                trace=True
+            ))
 
     @staticmethod
     def set_env_from_dict(env_dict: Dict[str, str]):
-        if not isinstance(env_dict, dict):
-            raise TypeError(create_error(status=StatusText.VALUE_ERROR,
-                                         message=f"Expected a dictionary for environment variables, but got {type(env_dict).__name__}"))
+        """
+        Sets environment variables from a dictionary.
+
+        Args:
+            env_dict (dict): A dictionary of environment variable names and values.
+
+        Raises:
+            TypeError: If the `env_dict` is not a dictionary or contains non-string keys/values.
+        """
+        match_type_or_raise_exception("Dict", env_dict)
 
         for key, value in env_dict.items():
-            if not isinstance(key, str) or not isinstance(value, str):
-                raise TypeError(create_error(status=StatusText.VALUE_ERROR,
-                                             message=f"Environment keys and values must be strings. Got: {key}={value}"))
-            else:
-                os.environ[key] = value
+            match_type_or_raise_exception("String", key)
+            match_type_or_raise_exception("String", value)
+            os.environ[key] = value
 
     @staticmethod
     def get_env_variables(env_file_path: str) -> Dict[str, str]:
@@ -87,12 +137,19 @@ class EnvManager:
 
         Returns:
             dict: A dictionary of environment variables from the .env file.
+
+        Raises:
+            FileNotFoundError: If the .env file does not exist.
         """
         EnvManager._verify_path_is_string(env_file_path)
 
         if not os.path.exists(env_file_path):
             raise FileNotFoundError(create_error(
-                status=StatusText.VALUE_ERROR, message=f"The specified .env file '{env_file_path}' does not exist."))
+                status=Status.ValueError,
+                details=f"The specified .env file '{
+                    env_file_path}' does not exist.",
+                trace=True
+            ))
 
         return dotenv_values(env_file_path)
 

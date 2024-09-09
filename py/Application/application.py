@@ -1,131 +1,144 @@
+import threading
 import tkinter as tk
 import time
-from UI.menus.options_menu import OptionsMenu
-from typing import Any, Optional
+from typing import Optional
 from Input.manager import InputManager
-from Utils.validation import is_key_of
-from Utils.environment import EnvManager
-from Error.base import StatusText, create_error
+from Application.menu_manager import MenuManager
+from constants import LAUNCH_OPTIONS_MENU, LOGGER_NAME_BASE, LOGGING_METHOD_OPTIONS
+from Error.base import Status, create_error
 from .signal import SignalBus, Signals
 from Utils.log import Logger
 
 
 class App:
-    env_attribute_transpiles = {
-        "APP_SLEEP_AFTER_CYCLE": float
-    }
+    def __init__(self, env_file: str, logging_method: str, signal_bus: SignalBus, input_manager: InputManager, sleep_after_cycle: float):
+        """
+        Initializes the application with environment, logging, signals, inputs, and menu management.
 
-    def __init__(self, env_file: str, logger: str, signal_bus: SignalBus, input_manager: InputManager):
+        Args:
+            env_file (str): The path to the environment file.
+            logging_method (str): The logging method to use ('file' or 'console').
+            signal_bus (SignalBus): The signal bus for inter-component communication.
+            input_manager (InputManager): The input manager for handling user inputs.
+            sleep_after_cycle (float): The sleep time between each application update cycle.
         """
-        Initializes the Application with the necessary components such as logger, message bus,
-        and input manager with the listener setup.
-        """
-        if logger not in ["file", "console"]:
-            raise ValueError(create_error(status=StatusText.VALUE_ERROR,
-                             message=f"Error: expected logger to be a string of 'console' or 'file', but received '{logger}' instead"))
-        else:
-            if logger == "file":
-                self.logger = Logger('RupyLogger').get_file_logger()
-            else:
-                self.logger = Logger('RupyLogger').get_console_logger()
+        self.logger: Logger
+        self._set_logger(method=logging_method)
         self.env_file = env_file
         self.signal_bus = signal_bus
         self.inputs = input_manager
+        self.sleep_after_cycle = sleep_after_cycle
         self.tk_root = tk.Tk()
         self.running = False
-        self.options_window_open = False
+        self.menu_manager = MenuManager(
+            root=self.tk_root, signal_bus=self.signal_bus, env_file_path=self.env_file)
 
-    def start(self):
-        """Starts the application."""
-        self.running = True
-        self.logger.info('Application start')
-        self.init()
-        self.run()
-        self.shutdown()
-
-    def set_attributes_from_env(self, attributes: list = ['APP_SLEEP_AFTER_CYCLE']):
+    def _set_logger(self, method: str):
         """
-        Sets class attributes based on environment variables.
+        Sets up the logger based on the specified logging method.
 
         Args:
-            attributes (list): A list of attribute names that correspond to environment variable names.
+            method (str): The logging method ('file' or 'console').
+
+        Raises:
+            TypeError: If the logging method is invalid or not recognized.
         """
-        for attr in attributes:
-            env_value = EnvManager.os_getenv(attr)
-            if env_value is None:
-                raise ValueError(create_error(status=StatusText.VALUE_ERROR,
-                                 message=f"Error: could not locate {attr} or value is None"))
-            else:
-                if attr in self.env_attribute_transpiles:
-                    setattr(self, attr.lower(),
-                            self.env_attribute_transpiles[attr](env_value))
-                else:
-                    setattr(self, attr.lower(),
-                            env_value)
+        if not method or not isinstance(method, str) or method not in LOGGING_METHOD_OPTIONS:
+            raise TypeError(create_error(
+                status=Status.TypeError,
+                details=f"Expected logger method to be one of 'file' or 'console', but received {
+                    method}."
+            ))
+        if method == LOGGING_METHOD_OPTIONS[0]:
+            self.logger = Logger(LOGGER_NAME_BASE).get_file_logger()
+        elif method == LOGGING_METHOD_OPTIONS[1]:
+            self.logger = Logger(LOGGER_NAME_BASE).get_console_logger()
 
-    def init(self):
-        """Initializes the engine, game resources, and launches the options menu."""
+    def start(self, args: dict):
+        """
+        Starts the application by initializing and running it.
+
+        Args:
+            args (dict): Arguments for initializing the application.
+        """
+        self.init(args)
+        self.shutdown()
+
+    def consume_signals(self):
+        """
+        Consumes signals for opening and closing menus.
+        """
+        self.signal_bus.consume(Signals.MENU_CLOSE.value)
+        self.signal_bus.consume(Signals.MENU_OPEN.value)
+
+    def init(self, args):
+        """
+        Initializes the application and runs the launch options menu if specified.
+
+        Args:
+            args (dict): Arguments specifying whether to open certain menus.
+        """
         self.publish_signal(Signals.APP_INIT)
-        self.set_attributes_from_env()
-        self.launch_options_menu()
-
-        if is_key_of("pygame", globals()):
-            pygame_module = globals().get("pygame", None)
-            if pygame_module and hasattr(pygame_module, "init") and callable(pygame_module.init):
-                pygame_module.init()
-
-    def launch_options_menu(self, menu_title: str = "RupyEngine Options Menu", menu_geometry: str = "400x600"):
-
-        def on_menu_close():
-            self.options_window_open = False
-
-        self.tk_root.title(menu_title)
-        self.tk_root.geometry(menu_geometry)
-        self.options_window_open = True
-        _ = OptionsMenu(
-            root=self.tk_root, close_menu_callback=on_menu_close, env_file_path=self.env_file, logger=self.logger)
-
-        self.tk_root.protocol("WM_DELETE_WINDOW", on_menu_close)
-
-        while self.options_window_open:
-            self.tk_root.update()
-            self.tk_root.update_idletasks()
-            time.sleep(0.1)
-
-        self.tk_root.destroy()
+        if args.get('lo'):
+            self.signal_bus.publish(
+                Signals.MENU_OPEN.value, LAUNCH_OPTIONS_MENU)
+        self.run()
 
     def run(self):
-        """Main loop of the engine."""
+        """
+        Runs the main application loop, updating inputs and processing signals.
+        """
         self.publish_signal(Signals.APP_START)
+        self.running = True
         while self.running:
-            self.update()
-            self.render()
-            time.sleep(self.app_sleep_after_cycle)
+            self.publish_signal(Signals.APP_UPDATE)
+            self.update_inputs()
+            self.consume_signals()
+            time.sleep(self.sleep_after_cycle)
 
-    def update(self):
-        """Update game state."""
-        self.publish_signal(Signals.APP_UPDATE)
-
+    def update_inputs(self):
+        """
+        Updates the state of the inputs and publishes relevant signals.
+        """
         self.publish_signal(Signals.INPUT_UPDATE_START)
         self.inputs.update()
-
         captured_inputs = self.inputs.get_state()
-        self.publish_signal(
-            Signals.INPUT_UPDATE_BUTTONS, captured_inputs.get("keyboard", self.inputs.keyboard_handler.initial_state))
-        self.publish_signal(
-            Signals.INPUT_UPDATE_MOUSE, captured_inputs.get("mouse", self.inputs.mouse_handler.initial_state))
-
+        self.publish_signal(Signals.INPUT_UPDATE_BUTTONS, captured_inputs.get(
+            "keyboard", self.inputs.keyboard_handler.initial_state))
+        self.publish_signal(Signals.INPUT_UPDATE_MOUSE, captured_inputs.get(
+            "mouse", self.inputs.mouse_handler.initial_state))
         self.publish_signal(Signals.INPUT_UPDATE_END)
 
-    def publish_signal(self, signal: Signals | Any, message: Optional[str] | Any = None):
-        self.logger.info(f"{signal} {message}")
-        self.signal_bus.publish(signal, message)
+    def publish_signal(self, signal: Signals, message: Optional[str] = None):
+        """
+        Publishes a signal with an optional message and logs it.
+
+        Args:
+            signal (Signals): The signal to publish.
+            message (Optional[str]): The message associated with the signal.
+        """
+        self.logger.info(f"{signal.value} {message}")
+        self.signal_bus.publish(signal.value, message)
+
+    def print_running_threads(self):
+        """
+        Logs the currently running threads in the application.
+        """
+        threads = threading.enumerate()
+        self.logger.info(f"Total running threads: {len(threads)}")
+        for thread in threads:
+            self.logger.info(f"{thread.name} (Daemon: {thread.daemon})")
 
     def render(self):
-        """Render the game."""
+        """
+        Publishes the render signal.
+        """
         self.publish_signal(Signals.APP_RENDER)
 
     def shutdown(self):
-        """Cleans up resources and exits the application."""
+        """
+        Shuts down the application by closing all menus and stopping the main loop.
+        """
         self.publish_signal(Signals.APP_SHUTDOWN)
+        self.menu_manager.close_all_menus()
         self.running = False

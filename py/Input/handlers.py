@@ -2,7 +2,8 @@ import ctypes
 from typing import Dict, Tuple
 
 from Utils.validation import is_key_of
-from .interfaces import HEX_MAP, InputListenerKeyboardInterface, InputListenerMouseInterface
+from constants import HEX_MAP
+from .interfaces import InputListenerKeyboardInterface, InputListenerMouseInterface
 
 
 class PygameKeyboardHandler(InputListenerKeyboardInterface):
@@ -99,7 +100,6 @@ class WinNativeKeyboardHandler(InputListenerKeyboardInterface):
         Updates the state of keyboard keys.
         """
 
-        # Update each key state using GetAsyncKeyState
         self.state = {
             key: bool(ctypes.windll.user32.GetAsyncKeyState(
                 hex_val) & 0x8000)

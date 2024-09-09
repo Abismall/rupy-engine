@@ -1,0 +1,10 @@
+[tool.rupyengine]
+root_dir = "/d/rupyengine"
+venv_dir = "/d/rupyengine/venv"
+sleep_after_cycle = 1
+include_trace_source_lines = true
+min_python_version_requirement='3.8'
+path_to_requirements_file='requirements.txt'
+logging_level='info'
+logging_format='verbose'
+logging_file_path='app.log'
