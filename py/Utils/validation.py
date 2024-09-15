@@ -1,7 +1,6 @@
 from enum import Enum
 # Updated to use the new Status and create_error
-from Error.base import Status, create_error
-from typing import Any
+from typing import Any, Type
 
 # Enum to define Python types for type matching
 
@@ -19,74 +18,35 @@ class PythonTypeEnum(Enum):
 
 
 def is_key_of(var_name: str, mapping: dict[str, Any]) -> bool:
-    """Checks if a variable is defined in the global scope."""
     return var_name in mapping
 
 
 def is_not_none(var: Any) -> bool:
-    """Checks if a variable is defined and is not None."""
     return var is not None
 
 
 def match_type(to_match: str, to_evaluate: Any) -> bool:
-    """
-    Checks if a variable is of a specific type without raising exceptions.
-
-    Args:
-        to_match (str): The type name to match against.
-        to_evaluate (Any): The variable to check.
-
-    Returns:
-        bool: True if the type matches, False otherwise.
-    """
     return to_match in PythonTypeEnum.__members__ and isinstance(to_evaluate, PythonTypeEnum[to_match].value)
 
 
-def match_type_or_raise_exception(to_match: str, to_evaluate: Any) -> bool:
-    """
-    Checks if a variable is of a specific type and raises an exception if not.
+def match_type_or_raise_exception(expected_type: Type, to_evaluate: Any) -> bool:
+    if to_evaluate is None:
+        raise UnboundLocalError(
+            f"Unbound or undefined variable '{to_evaluate}'")
 
-    Args:
-        to_match (str): The type name to match against.
-        to_evaluate (Any): The variable to check.
-
-    Returns:
-        bool: True if the type matches.
-
-    Raises:
-        UnboundLocalError: If the variable is not defined in the current context.
-        ValueError: If the provided type name is not recognized.
-        RuntimeError: If an unexpected error occurs during type checking.
-    """
-    if not is_not_none(to_evaluate):
-        raise UnboundLocalError(create_error(
-            status=Status.UnboundLocalError,
-            details=f"Unbound or undefined variable '{to_evaluate}'"
-        ))
-
-    if to_match not in PythonTypeEnum.__members__:
-        raise ValueError(create_error(
-            status=Status.ValueError,
-            details=f"Invalid or unknown type '{to_match}'"
-        ))
+    if not isinstance(expected_type, type):
+        raise ValueError(f"Invalid or unknown type '{expected_type}'")
 
     try:
-        if match_type(to_match, to_evaluate):
+        if isinstance(to_evaluate, expected_type):
             return True
         else:
-            raise TypeError(create_error(
-                status=Status.TypeError,
-                details=f"Expected type '{to_match}', but received '{
-                    type(to_evaluate).__name__}'"
-            ))
+            raise TypeError(f"Expected type '{expected_type.__name__}', but received '{
+                            type(to_evaluate).__name__}'")
     except Exception as e:
-        raise RuntimeError(create_error(
-            status=Status.RuntimeError,
-            details=f"Warning: Unknown exception caught when matching types for '{
-                to_match}', '{type(to_evaluate).__name__}'"
-        )) from e
+        raise RuntimeError(f"Warning: Unknown exception caught when matching types for '{
+                           expected_type.__name__}', '{type(to_evaluate).__name__}'")
 
 
 def is_callable(method: Any) -> bool:
-    """Checks if the provided method is callable."""
     return callable(method)

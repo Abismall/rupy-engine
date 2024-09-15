@@ -1,29 +1,19 @@
+import sys
 import threading
 import tkinter as tk
 import time
 from typing import Optional
 from Input.manager import InputManager
 from Application.menu_manager import MenuManager
-from constants import LAUNCH_OPTIONS_MENU, LOGGER_NAME_BASE, LOGGING_METHOD_OPTIONS
-from Error.base import Status, create_error
+from Utils.constants import LAUNCH_OPTIONS_FLAG, LAUNCH_OPTIONS_MENU, FROZEN_EXEC
+from Utils.environment import EnvManager
+from Error.base import PyEngineError
 from .signal import SignalBus, Signals
-from Utils.log import Logger
 
 
 class App:
-    def __init__(self, env_file: str, logging_method: str, signal_bus: SignalBus, input_manager: InputManager, sleep_after_cycle: float):
-        """
-        Initializes the application with environment, logging, signals, inputs, and menu management.
-
-        Args:
-            env_file (str): The path to the environment file.
-            logging_method (str): The logging method to use ('file' or 'console').
-            signal_bus (SignalBus): The signal bus for inter-component communication.
-            input_manager (InputManager): The input manager for handling user inputs.
-            sleep_after_cycle (float): The sleep time between each application update cycle.
-        """
-        self.logger: Logger
-        self._set_logger(method=logging_method)
+    def __init__(self, env_file: str, signal_bus: SignalBus, input_manager: InputManager, logger, sleep_after_cycle: float):
+        self.logger = logger
         self.env_file = env_file
         self.signal_bus = signal_bus
         self.inputs = input_manager
@@ -32,74 +22,53 @@ class App:
         self.running = False
         self.menu_manager = MenuManager(
             root=self.tk_root, signal_bus=self.signal_bus, env_file_path=self.env_file)
-
-    def _set_logger(self, method: str):
-        """
-        Sets up the logger based on the specified logging method.
-
-        Args:
-            method (str): The logging method ('file' or 'console').
-
-        Raises:
-            TypeError: If the logging method is invalid or not recognized.
-        """
-        if not method or not isinstance(method, str) or method not in LOGGING_METHOD_OPTIONS:
-            raise TypeError(create_error(
-                status=Status.TypeError,
-                details=f"Expected logger method to be one of 'file' or 'console', but received {
-                    method}."
-            ))
-        if method == LOGGING_METHOD_OPTIONS[0]:
-            self.logger = Logger(LOGGER_NAME_BASE).get_file_logger()
-        elif method == LOGGING_METHOD_OPTIONS[1]:
-            self.logger = Logger(LOGGER_NAME_BASE).get_console_logger()
+        self.signal_bus.subscribe(
+            Signals.ENV_RELOAD.value, self.load_environment)
 
     def start(self, args: dict):
-        """
-        Starts the application by initializing and running it.
-
-        Args:
-            args (dict): Arguments for initializing the application.
-        """
         self.init(args)
         self.shutdown()
 
     def consume_signals(self):
-        """
-        Consumes signals for opening and closing menus.
-        """
-        self.signal_bus.consume(Signals.MENU_CLOSE.value)
-        self.signal_bus.consume(Signals.MENU_OPEN.value)
+        for signal in Signals:
+            self.signal_bus.consume(signal.value)
 
     def init(self, args):
-        """
-        Initializes the application and runs the launch options menu if specified.
-
-        Args:
-            args (dict): Arguments specifying whether to open certain menus.
-        """
         self.publish_signal(Signals.APP_INIT)
-        if args.get('lo'):
+
+        if hasattr(sys, FROZEN_EXEC):
+            self.signal_bus.publish(
+                Signals.MENU_OPEN.value, LAUNCH_OPTIONS_MENU)
+        elif args.get(LAUNCH_OPTIONS_FLAG):
             self.signal_bus.publish(
                 Signals.MENU_OPEN.value, LAUNCH_OPTIONS_MENU)
         self.run()
 
+    def load_environment(self, channel: str, message: str):
+        try:
+            EnvManager.load_env(self.env_file)
+            for key, value in EnvManager.get_dotenv_values(self.env_file).items():
+                print(key, value)
+                print(isinstance(key, str) and hasattr(self, key.lower()))
+                if isinstance(key, str) and hasattr(self, key.lower()):
+                    if int(value):
+                        setattr(self,  key.lower(), int(value))
+                    else:
+                        setattr(self,  key.lower(), value)
+        except Exception as e:
+            raise PyEngineError("CONFIG_LOAD_FAILED") from e
+
     def run(self):
-        """
-        Runs the main application loop, updating inputs and processing signals.
-        """
         self.publish_signal(Signals.APP_START)
         self.running = True
         while self.running:
             self.publish_signal(Signals.APP_UPDATE)
             self.update_inputs()
             self.consume_signals()
+            self.logger.info(f"Sleeping for: {self.sleep_after_cycle}")
             time.sleep(self.sleep_after_cycle)
 
     def update_inputs(self):
-        """
-        Updates the state of the inputs and publishes relevant signals.
-        """
         self.publish_signal(Signals.INPUT_UPDATE_START)
         self.inputs.update()
         captured_inputs = self.inputs.get_state()
@@ -110,35 +79,19 @@ class App:
         self.publish_signal(Signals.INPUT_UPDATE_END)
 
     def publish_signal(self, signal: Signals, message: Optional[str] = None):
-        """
-        Publishes a signal with an optional message and logs it.
-
-        Args:
-            signal (Signals): The signal to publish.
-            message (Optional[str]): The message associated with the signal.
-        """
         self.logger.info(f"{signal.value} {message}")
         self.signal_bus.publish(signal.value, message)
 
     def print_running_threads(self):
-        """
-        Logs the currently running threads in the application.
-        """
         threads = threading.enumerate()
         self.logger.info(f"Total running threads: {len(threads)}")
         for thread in threads:
             self.logger.info(f"{thread.name} (Daemon: {thread.daemon})")
 
     def render(self):
-        """
-        Publishes the render signal.
-        """
         self.publish_signal(Signals.APP_RENDER)
 
     def shutdown(self):
-        """
-        Shuts down the application by closing all menus and stopping the main loop.
-        """
         self.publish_signal(Signals.APP_SHUTDOWN)
         self.menu_manager.close_all_menus()
         self.running = False

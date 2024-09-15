@@ -1,0 +1,7 @@
+[rupyengine]
+sleep_after_cycle = 1
+include_trace_source_lines = true
+min_python_version_requirement='3.8'
+logging_level='info'
+logging_format='verbose'
+logging_file_path='app.log'

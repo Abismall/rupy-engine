@@ -2,7 +2,7 @@ from enum import Enum
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Any
-from Error.base import Status, create_error
+from Error.base import PyEngineError
 from Utils.environment import EnvManager
 
 
@@ -30,12 +30,6 @@ class LogFormat(Enum):
 
     @classmethod
     def name_to_format(cls):
-        """
-        Creates a dictionary that maps format names to their corresponding enum values.
-
-        Returns:
-            dict: A dictionary mapping string format names to enum values.
-        """
         return {
             'SIMPLE': cls.SIMPLE.value,
             'DETAILED': cls.DETAILED.value,
@@ -46,186 +40,137 @@ class LogFormat(Enum):
 
     @classmethod
     def from_name(cls, name: str):
-        """
-        Gets the log format string from its name.
-
-        Args:
-            name (str): The name of the log format (e.g., 'SIMPLE').
-
-        Returns:
-            str: The log format string associated with the given name.
-
-        Raises:
-            ValueError: If the format name is not recognized.
-        """
         name = name.upper()
         name_to_format = cls.name_to_format()
-        if name not in name_to_format:
-            raise ValueError(create_error(
-                status=Status.ValueError,
-                details=f"Invalid log format name: {
-                    name}. Must be one of {list(name_to_format.keys())}."
-            ))
-        return name_to_format[name]
+        try:
+            if name and name in name_to_format:
+                return name_to_format[name]
+            raise ValueError(f"Invalid log format name: {name}. Must be one of {
+                             list(name_to_format.keys())}.")
+        except ValueError as e:
+            raise PyEngineError("VALUE_ERROR") from e
 
 
 class Logger:
     def __init__(self, name: str = None, log_file: str = None, log_level=None, log_format=None):
-        """
-        Initializes the custom logger with separate loggers for console and file.
-
-        Args:
-            name (str): The name of the logger.
-            log_file (str): The file where logs will be saved.
-            log_level (int): The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-            log_format (LogFormat): The format of the log messages.
-        """
         self.name = name if isinstance(name, str) else 'RupyLogger'
-        self.log_file = self._get_arg_or_env(
-            'LOGGING_FILE_PATH', log_file, str)
-        self.log_level = self._get_arg_or_env(
-            'LOGGING_LEVEL', log_level, self._validate_log_level)
-        self.log_format = self._get_arg_or_env(
-            'LOGGING_FORMAT', log_format, self._validate_log_format)
+        try:
+            self.log_file = self._get_arg_or_env(
+                'LOGGING_FILE_PATH', log_file, str)
+            self.log_level = self._get_arg_or_env(
+                'LOGGING_LEVEL', log_level, self._validate_log_level)
+            self.log_format = self._get_arg_or_env(
+                'LOGGING_FORMAT', log_format, self._validate_log_format)
+        except PyEngineError as e:
+            raise PyEngineError("CONFIG_LOAD_FAILED") from e
 
-        self.console_logger = self._create_console_logger()
-        self.file_logger = self._create_file_logger()
+        try:
+            self.console_logger = self._create_console_logger()
+            self.file_logger = self._create_file_logger()
+        except Exception as e:
+            raise PyEngineError("LOGGING_ERROR") from e
 
     def _get_arg_or_env(self, arg_name, arg_value, validation_func):
-        """
-        Retrieves an argument value or fetches it from the environment if not provided.
+        try:
+            if arg_value is not None:
+                return validation_func(arg_value)
 
-        Args:
-            arg_name (str): The name of the argument or environment variable.
-            arg_value (Any): The value of the argument, if provided.
-            validation_func (callable): A function to validate the argument value.
+            env_value = EnvManager.os_getenv(arg_name)
+            if env_value is not None:
+                return validation_func(env_value)
 
-        Returns:
-            Any: The validated argument value.
-
-        Raises:
-            ValueError: If the value is missing or invalid.
-        """
-        if arg_value is not None:
-            return validation_func(arg_value)
-
-        env_value = EnvManager.os_getenv(arg_name)
-        if env_value is not None:
-            return validation_func(env_value)
-
-        raise ValueError(create_error(
-            status=Status.ValueError,
-            details=f"'{
-                arg_name}' must be provided either as an argument or an environment variable."
-        ))
+            raise ValueError(
+                f"'{arg_name}' must be provided either as an argument or an environment variable.")
+        except ValueError as e:
+            raise PyEngineError("VALUE_ERROR") from e
+        except TypeError as e:
+            raise PyEngineError("TYPE_ERROR") from e
+        except Exception as e:
+            raise PyEngineError("UNKNOWN_ERROR") from e
 
     def _validate_log_level(self, log_level):
-        """
-        Validates the logging level.
-
-        Args:
-            log_level (Any): The logging level to validate.
-
-        Returns:
-            int: The validated logging level.
-
-        Raises:
-            ValueError: If the logging level is invalid.
-        """
-        if isinstance(log_level, int):
-            if log_level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]:
+        try:
+            if isinstance(log_level, int) and log_level in [
+                    logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]:
                 return log_level
-        elif isinstance(log_level, str):
-            log_level = log_level.upper()
-            if log_level in logging._nameToLevel:
-                return logging._nameToLevel[log_level]
+            elif isinstance(log_level, str):
+                log_level = log_level.upper()
+                if log_level in logging._nameToLevel:
+                    return logging._nameToLevel[log_level]
 
-        raise ValueError(create_error(
-            status=Status.ValueError,
-            details=f"Invalid log level: {log_level}. Must be one of {
-                ', '.join(logging._nameToLevel.keys())}."
-        ))
+            raise ValueError(f"Invalid log level: {log_level}. Must be one of {
+                             ', '.join(logging._nameToLevel.keys())}.")
+        except ValueError as e:
+            raise PyEngineError("VALUE_ERROR") from e
 
     def _validate_log_format(self, log_format):
-        """
-        Validates the logging format.
+        try:
+            if isinstance(log_format, LogFormat):
+                return log_format
+            elif isinstance(log_format, str):
+                log_format = log_format.upper()
+                if log_format in LogFormat.__members__:
+                    return LogFormat[log_format]
 
-        Args:
-            log_format (Any): The log format to validate.
-
-        Returns:
-            LogFormat: The validated log format.
-
-        Raises:
-            ValueError: If the log format is invalid.
-        """
-        if isinstance(log_format, LogFormat):
-            return log_format
-        elif isinstance(log_format, str):
-            log_format = log_format.upper()
-            if log_format in LogFormat.__members__:
-                return LogFormat[log_format]
-
-        raise ValueError(create_error(
-            status=Status.ValueError,
-            details=f"Invalid log format: {log_format}. Must be one of {
-                ', '.join(LogFormat.__members__.keys())}."
-        ))
+            raise ValueError(f"Invalid log format: {log_format}. Must be one of {
+                             ', '.join(LogFormat.__members__.keys())}.")
+        except ValueError as e:
+            raise PyEngineError("VALUE_ERROR") from e
 
     def _create_console_logger(self) -> logging.Logger:
-        """
-        Creates and configures the console logger.
+        try:
+            console_logger = logging.getLogger(f"{self.name}_console")
+            console_logger.setLevel(self.log_level)
 
-        Returns:
-            logging.Logger: The configured console logger.
-        """
-        console_logger = logging.getLogger(f"{self.name}_console")
-        console_logger.setLevel(self.log_level)
+            formatter = logging.Formatter(self.log_format.value)
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(self.log_level)
+            console_handler.setFormatter(formatter)
 
-        formatter = logging.Formatter(self.log_format.value)
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(self.log_level)
-        console_handler.setFormatter(formatter)
+            if not console_logger.hasHandlers():
+                console_logger.addHandler(console_handler)
 
-        if not console_logger.hasHandlers():
-            console_logger.addHandler(console_handler)
-
-        return console_logger
+            return console_logger
+        except Exception as e:
+            raise PyEngineError("LOGGING_ERROR") from e
 
     def _create_file_logger(self) -> logging.Logger:
-        """
-        Creates and configures the file logger.
+        try:
+            file_logger = logging.getLogger(f"{self.name}_file")
+            file_logger.setLevel(self.log_level)
 
-        Returns:
-            logging.Logger: The configured file logger.
-        """
-        file_logger = logging.getLogger(f"{self.name}_file")
-        file_logger.setLevel(self.log_level)
+            formatter = logging.Formatter(self.log_format.value)
+            file_handler = RotatingFileHandler(
+                self.log_file, maxBytes=5 * 1024 * 1024, backupCount=3
+            )
+            file_handler.setLevel(self.log_level)
+            file_handler.setFormatter(formatter)
 
-        formatter = logging.Formatter(self.log_format.value)
-        file_handler = RotatingFileHandler(
-            self.log_file, maxBytes=5 * 1024 * 1024, backupCount=3
-        )
-        file_handler.setLevel(self.log_level)
-        file_handler.setFormatter(formatter)
+            if not file_logger.hasHandlers():
+                file_logger.addHandler(file_handler)
 
-        if not file_logger.hasHandlers():
-            file_logger.addHandler(file_handler)
-
-        return file_logger
+            return file_logger
+        except FileNotFoundError:
+            raise PyEngineError("FILE_NOT_FOUND")
+        except PermissionError:
+            raise PyEngineError("PERMISSION_DENIED")
+        except Exception as e:
+            raise PyEngineError("LOGGING_ERROR") from e
 
     def log_to_console(self, level: int, message: str):
-        """Logs a message to the console logger."""
-        self.console_logger.log(level, message)
+        try:
+            self.console_logger.log(level, message)
+        except Exception as e:
+            raise PyEngineError("LOGGING_ERROR") from e
 
     def log_to_file(self, level: int, message: str):
-        """Logs a message to the file logger."""
-        self.file_logger.log(level, message)
+        try:
+            self.file_logger.log(level, message)
+        except Exception as e:
+            raise PyEngineError("LOGGING_ERROR") from e
 
     def get_console_logger(self):
-        """Returns the console logger."""
         return self.console_logger
 
     def get_file_logger(self):
-        """Returns the file logger."""
         return self.file_logger

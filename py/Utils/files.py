@@ -1,6 +1,76 @@
 import os
-from Error.base import Status, create_error
-from .validation import match_type_or_raise_exception
+import subprocess
+import sys
+from Error.base import PyEngineError
+
+
+def find_project_root(dirname: str) -> str:
+    try:
+        return os.path.abspath(os.path.dirname(dirname))
+    except Exception as e:
+        raise PyEngineError("UNKNOWN_ERROR") from e
+
+
+def install_package(package):
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", package])
+    except subprocess.CalledProcessError:
+        raise PyEngineError("CHILD_PROCESS_ERROR")
+
+
+def run_command(command, error_message):
+    try:
+        subprocess.run(command, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        print(f"Error: {error_message}")
+        raise PyEngineError("CHILD_PROCESS_ERROR")
+
+
+def ensure_packages_installed(packages):
+    print(f"Checking and installing required packages: {
+          ', '.join(packages)}...")
+    for package in packages:
+        try:
+            __import__(package)
+        except ImportError:
+            print(f"Package {package} not found. Installing...")
+            try:
+                install_package(package)
+            except PyEngineError:
+                print(f"Failed to install package: {package}")
+                raise PyEngineError("PACKAGE_INSTALL_ERROR")
+
+
+def create_virtual_environment(venv_path: str, exec):
+    try:
+        if not os.path.isdir(venv_path):
+            if not run_command([exec, "-m", "venv", venv_path], "Failed to create the virtual environment."):
+                sys.exit(1)
+    except FileNotFoundError:
+        raise PyEngineError("FILE_NOT_FOUND")
+    except PermissionError:
+        raise PyEngineError("PERMISSION_DENIED")
+    except Exception as e:
+        raise PyEngineError("UNKNOWN_ERROR") from e
+
+
+def activate_virtual_environment(venv_path: str):
+    try:
+        if os.name == 'nt':  # Windows
+            activate_script = os.path.join(venv_path, "Scripts", "activate")
+        else:  # Unix-based systems
+            activate_script = os.path.join(venv_path, "bin", "activate")
+
+        print(f"({f'source {activate_script}'})")
+
+        if os.name == 'nt':
+            subprocess.call(activate_script, shell=True)
+        else:
+            os.system(f"source {activate_script}")
+    except Exception as e:
+        raise PyEngineError("CHILD_PROCESS_ERROR") from e
 
 
 class FilePath:
@@ -16,20 +86,12 @@ class FilePath:
             bool: True if the path exists, False otherwise.
 
         Raises:
-            RuntimeError: If an error occurs while checking the path.
+            PyEngineError: If an error occurs while checking the path.
         """
-        match_type_or_raise_exception("String", file_path)
         try:
             return os.path.exists(file_path)
         except Exception as e:
-            raise RuntimeError(
-                create_error(
-                    status=Status.RuntimeError,
-                    details=f"An exception occurred while checking if the path '{
-                        file_path}' exists.",
-                    trace=True
-                )
-            ) from e
+            raise PyEngineError("UNKNOWN_ERROR") from e
 
     @staticmethod
     def create_path_if_not_exists(path_string: str):
@@ -40,10 +102,12 @@ class FilePath:
             path_string (str): The path to the directory or file.
 
         Raises:
-            TypeError: If the `path_string` is not a string.
-            RuntimeError: If an error occurs while creating the directory.
+            PyEngineError: If an error occurs while creating the directory.
         """
-        FilePath._create_if_not_exists(file_path_arg=path_string)
+        try:
+            FilePath._create_if_not_exists(file_path_arg=path_string)
+        except Exception as e:
+            raise PyEngineError("UNKNOWN_ERROR") from e
 
     @staticmethod
     def create_non_existing_paths(paths_list: list[str]):
@@ -54,13 +118,13 @@ class FilePath:
             paths_list (list[str]): List of paths to the directories or files.
 
         Raises:
-            ValueError: If the `paths_list` is not a list.
-            RuntimeError: If an error occurs while creating the directory.
+            PyEngineError: If an error occurs while creating the directory.
         """
-        match_type_or_raise_exception(
-            to_match="List", to_evaluate=paths_list)
         for path in paths_list:
-            FilePath._create_if_not_exists(file_path_arg=path)
+            try:
+                FilePath._create_if_not_exists(file_path_arg=path)
+            except Exception as e:
+                raise PyEngineError("UNKNOWN_ERROR") from e
 
     @staticmethod
     def _create_if_not_exists(file_path_arg: str) -> None:
@@ -71,25 +135,15 @@ class FilePath:
             file_path_arg (str): The path to check and create if not exists.
 
         Raises:
-            RuntimeError: If an error occurs while creating the directory.
+            PyEngineError: If an error occurs while creating the directory.
         """
-        match_type_or_raise_exception(
-            to_match="String", to_evaluate=file_path_arg)
         directory = os.path.dirname(file_path_arg) if os.path.isfile(
             file_path_arg) else file_path_arg
         if not FilePath.path_exists(directory):
             try:
                 os.makedirs(directory, exist_ok=True)
             except Exception as e:
-                raise RuntimeError(
-                    create_error(
-                        status=Status.RuntimeError,
-                        details=f"An exception occurred while trying to create the directory '{
-                            directory}'.",
-                        trace=True
-                    )
-                ) from e
-
+                raise PyEngineError("FILE_NOT_FOUND") from e
 
 # def get_file_suffix(file_path: str):
 #     """

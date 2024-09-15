@@ -1,6 +1,5 @@
 
-
-from constants import KEYBOARD_INTERFACE_INITIAL_STATE, MOUSE_INTERFACE_INITIAL_STATE
+from Utils.constants import KEYBOARD_INTERFACE_INITIAL_STATE, MOUSE_INTERFACE_INITIAL_STATE
 
 
 class InputListenerBaseInterface:

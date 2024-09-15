@@ -1,84 +1,51 @@
-import os
 import argparse
-from typing import Any
-from Application import App
 from Application.signal import SignalBus
-from Input import InputManager, WinNativeKeyboardHandler, WinNativeMouseHandler
 from Utils.environment import EnvManager
-from Error.base import Status, create_error
+from Input.handlers import WinNativeKeyboardHandler, WinNativeMouseHandler
+from Input.manager import InputManager
+from Application.application import App
+from Utils.constants import DEFAULT_LOG_FILE, DEFAULT_LOG_FORMAT, DEFAULT_LOG_LEVEL, DEFAULT_SLEEP_AFTER_CYCLE, LOG_METHOD_CONSOLE, LOGGING_METHOD_OPTIONS, PYENGINE
+from Utils.log import Logger
 
 
 def parse_arguments():
-    """
-    Parses command-line arguments for the application.
-
-    Returns:
-        argparse.Namespace: Parsed arguments.
-    """
     parser = argparse.ArgumentParser(
-        description="Application CLI argument parser.")
+        description=PYENGINE)
+
     parser.add_argument(
-        "-lo", "--lo", action="store_true", help="Launch options menu on start if this flag is present.")
-    args = parser.parse_args()
-    return args
+        "-lo", "--lo", action="store_true")
 
-
-def get_env_value(env_key: str, default: Any, expected_type: type) -> Any:
-    """
-    Retrieves an environment variable, validates its type, and provides a default if not set or invalid.
-
-    Args:
-        env_key (str): The environment variable key.
-        default (Any): The default value to return if the environment variable is not set or invalid.
-        expected_type (type): The expected type of the environment variable.
-
-    Returns:
-        Any: The value of the environment variable or the default if not set or invalid.
-    """
-    try:
-        value = EnvManager.os_getenv(env_key)
-        if value is None:
-            return default
-        value = expected_type(value)
-        return value
-    except ValueError:
-        print(create_error(
-            status=Status.ValueError,
-            details=f"Invalid type for environment variable '{
-                env_key}'. Expected {expected_type.__name__}."
-        ))
-        return default
+    return parser.parse_args()
 
 
 def main():
-    """
-    Main entry point for the application.
-    """
     args = parse_arguments()
+    env_file_path = "py/.env"
 
-    env_file_path = ".env"
-    try:
-        EnvManager.set_env_from_file(env_file_path)
-    except Exception as e:
-        print(create_error(
-            status=Status.RuntimeError,
-            details=f"Failed to load environment file: {env_file_path}.",
-            trace=True
-        ))
+    EnvManager.set_env_from_file(env_file_path)
 
-    sleep_after_cycle = get_env_value("SLEEP_AFTER_CYCLE", 0.1, float)
-
+    sleep_after_cycle = EnvManager.env_or_default(
+        "SLEEP_AFTER_CYCLE", DEFAULT_SLEEP_AFTER_CYCLE, float)
+    logging_method = EnvManager.env_or_default(
+        "LOGGING_METHOD", LOG_METHOD_CONSOLE, str)
+    logging_level = EnvManager.env_or_default(
+        "LOGGING_LEVEL", DEFAULT_LOG_LEVEL, str)
+    logging_format = EnvManager.env_or_default(
+        "LOGGING_FORMAT", DEFAULT_LOG_FORMAT, str)
+    logging_file_path = EnvManager.env_or_default(
+        "LOGGING_FILE_PATH", DEFAULT_LOG_FILE, str)
     app = App(
         env_file=env_file_path,
-        logging_method=get_env_value("LOGGING_METHOD", "console", str),
+        logger=Logger(name=PYENGINE, log_file=logging_file_path, log_level=logging_level, log_format=logging_format).get_console_logger(
+        ) if logging_method == LOGGING_METHOD_OPTIONS[0] else Logger(name=PYENGINE, log_file=logging_file_path, log_level=logging_level, log_format=logging_format).get_file_logger(),
         signal_bus=SignalBus(),
         sleep_after_cycle=sleep_after_cycle,
         input_manager=InputManager(
             mouse=WinNativeMouseHandler(),
             keyboard=WinNativeKeyboardHandler(),
             pressed_only_mode=True
-        )
-    )
+        ))
+
     app.start(vars(args))
 
 
