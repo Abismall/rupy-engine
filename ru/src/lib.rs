@@ -16,6 +16,13 @@ macro_rules! log_debug {
         log::debug!($($arg)*);
     };
 }
+#[cfg(feature = "logging")]
+#[macro_export]
+macro_rules! log_info {
+    ($($arg:tt)*) => {
+        log::info!($($arg)*);
+    };
+}
 
 #[cfg(not(feature = "logging"))]
 #[macro_export]

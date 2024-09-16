@@ -8,7 +8,7 @@ impl Default for LogFactory {
     fn default() -> Self {
         #[cfg(debug_assertions)]
         {
-            Self::new(LevelFilter::Info)
+            Self::new(LevelFilter::Debug)
         }
         #[cfg(not(debug_assertions))]
         {
@@ -22,7 +22,8 @@ impl LogFactory {
         let mut env_logger_builder = env_logger::Builder::new();
         env_logger_builder
             .filter_level(level)
-            .filter_module("wgpu_hal", LevelFilter::Off);
+            .filter_module("wgpu_hal", LevelFilter::Debug)
+            .filter_module("wgpu_core", LevelFilter::Debug);
 
         Self {
             env_logger: env_logger_builder,

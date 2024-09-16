@@ -7,6 +7,8 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
+use super::render_command::RenderCommand;
+
 #[derive(Clone)]
 pub struct GpuConfig {
     pub backends: Backends,
@@ -62,7 +64,7 @@ impl Gpu {
                     label: None,
                     required_features: gpu_config.device_features,
                     required_limits: gpu_config.device_limits.using_resolution(adapter.limits()),
-                    memory_hints: wgpu::MemoryHints::MemoryUsage,
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
@@ -74,17 +76,7 @@ impl Gpu {
 
         let samples = Gpu::determine_samples(gpu_config.max_samples, format, &adapter);
 
-        let config = SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format,
-            width: window.inner_size().width.max(1),
-            height: window.inner_size().height.max(1),
-            present_mode: PresentMode::Fifo,
-            alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
-            desired_maximum_frame_latency: 1,
-        };
-
+        let config = Gpu::default_config(&surface, &adapter, &window);
         let sample_state = MultisampleState {
             count: samples,
             mask: !0,
@@ -108,6 +100,25 @@ impl Gpu {
     }
 
     pub fn create_render_pipeline(&self) -> wgpu::RenderPipeline {
+        // Define the vertex buffer layout, including position and color
+        let vertex_layout = wgpu::VertexBufferLayout {
+            array_stride: (3 + 3) * std::mem::size_of::<f32>() as wgpu::BufferAddress, // 3 position + 3 color
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3, // Position attribute
+                },
+                wgpu::VertexAttribute {
+                    offset: 3 * std::mem::size_of::<f32>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3, // Color attribute
+                },
+            ],
+        };
+
+        // Load the shaders
         let shader = self
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -115,24 +126,25 @@ impl Gpu {
                 source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/shader.wgsl").into()),
             });
 
+        // Create the pipeline layout
         let pipeline_layout = self
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Layout"),
+                label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
             });
 
-        let render_pipeline = self
-            .device
+        // Create the render pipeline
+        self.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: "vs_main",
-                    buffers: &[],
-                    compilation_options: Default::default(),
+                    buffers: &[vertex_layout],
+                    compilation_options: Default::default(), // Attach the vertex buffer layout here
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
@@ -149,17 +161,18 @@ impl Gpu {
                 multisample: self.sample_state,
                 multiview: None,
                 cache: None,
-            });
-
-        render_pipeline
+            })
     }
-    pub fn render(&self, pipeline: &wgpu::RenderPipeline, window: &Window) {
-        self.reconfigure(window);
+    pub fn render_with_command(
+        &self,
+        command: &RenderCommand,
+        window: &Window,
+        bind_group: &wgpu::BindGroup,
+    ) {
         let frame = match self.start_frame() {
             Ok(texture) => texture,
             Err(wgpu::SurfaceError::Outdated) => {
                 self.reconfigure(window);
-
                 match self.start_frame() {
                     Ok(texture) => texture,
                     Err(e) => {
@@ -180,10 +193,8 @@ impl Gpu {
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
         let msaa_view = if self.samples > 1 {
             let msaa_texture = self.create_msaa_texture();
-
             Some(msaa_texture)
         } else {
             None
@@ -211,12 +222,14 @@ impl Gpu {
                 occlusion_query_set: None,
             });
 
-            render_pass.set_pipeline(pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_bind_group(0, bind_group, &[]);
+
+            command.execute(&mut render_pass);
         }
 
         self.submit(vec![encoder.finish()]);
         frame.present();
+        window.request_redraw();
     }
 
     fn determine_samples(max_samples: u8, format: TextureFormat, adapter: &Adapter) -> u32 {
@@ -244,6 +257,7 @@ impl Gpu {
     pub fn reconfigure(&self, window: &Window) {
         let current_size = Self::compute_surface_size(window);
         let config = Self::default_config(&self.surface, &self.adapter, window);
+
         self.surface.configure(&self.device, &config);
         self.update_surface_size(current_size);
         self.resize(PhysicalSize::new(config.width, config.height));
@@ -261,9 +275,19 @@ impl Gpu {
         window: &Window,
     ) -> wgpu::SurfaceConfiguration {
         let surface_size = Self::compute_surface_size(window);
-        surface
-            .get_default_config(adapter, surface_size.x, surface_size.y)
-            .expect("Surface isn't supported by the adapter.")
+
+        let surface_caps = surface.get_capabilities(adapter);
+
+        wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_caps.formats[0],
+            width: surface_size.x.max(1),
+            height: surface_size.y.max(1),
+            present_mode: PresentMode::Fifo,
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 0,
+        }
     }
     pub fn update_surface_size(&self, new_size: Vector2<u32>) {
         *self

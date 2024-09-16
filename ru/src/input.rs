@@ -9,7 +9,6 @@ impl InputHandler {
     }
     pub fn mousemotion(&mut self, delta: (f64, f64)) {
         let movement = MouseMovementDetails::new(delta);
-        log_debug!("{:?}", movement);
     }
     pub fn key(&mut self, event: &RawKeyEvent) {
         match event.physical_key {
