@@ -1,9 +1,10 @@
+use pollster::FutureExt;
 use rand::Rng;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
 };
-use wgpu::{util::DeviceExt, Buffer, BufferUsages};
+use wgpu::{Buffer, BufferUsages, Device, Instance, Queue, RenderPipeline, SurfaceConfiguration};
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalPosition, Position},
@@ -18,15 +19,17 @@ use crate::{
     log_debug, log_error, log_info,
     logger::LogFactory,
     rendering::{
-        gpu::{Gpu, GpuConfig},
-        render_command::RenderCommand,
+        command::RenderCommand,
+        gpu::{render_frame, GpuConfig, GPU},
+        pipeline::RenderPipelineManager,
+        queue::RenderCommandQueue,
     },
     window::build_window_attributes,
 };
 
 pub struct AppConfig {
     pub window: winit::window::WindowAttributes,
-    pub(crate) gpu: GpuConfig,
+    pub(crate) gpu_config: GpuConfig,
     pub scene_id: u32,
     #[cfg(target_os = "android")]
     pub android: AndroidApp,
@@ -54,7 +57,7 @@ impl AppConfig {
                 Position::new(LogicalPosition::new(300, 150)),
                 false,
             ),
-            gpu: GpuConfig::default(),
+            gpu_config: GpuConfig::default(),
             scene_id: Self::FIRST_SCENE_ID,
 
             #[cfg(target_os = "android")]
@@ -83,8 +86,8 @@ impl AppConfig {
         self
     }
 
-    pub fn gpu(mut self, gpu: GpuConfig) -> Self {
-        self.gpu = gpu;
+    pub fn gpu(mut self, gpu_config: GpuConfig) -> Self {
+        self.gpu_config = gpu_config;
         self
     }
 
@@ -113,189 +116,181 @@ impl AppConfig {
 }
 
 pub enum AppState {
-    Setup { config: AppConfig },
-    Run(App),
+    Uninitialized { config: AppConfig },
+    Initialized(App),
 }
 
 pub struct App {
-    pub(crate) input: InputHandler,
-    pub(crate) gpu: Option<Arc<Gpu>>,
-    pub(crate) render_pipeline: Option<Arc<wgpu::RenderPipeline>>,
-    pub(crate) vertex_buffer: Option<Arc<Buffer>>,
-    pub(crate) bind_group: Option<wgpu::BindGroup>,
+    render_pipelines: HashMap<String, Arc<RenderPipeline>>,
+    vertex_buffer: Option<Arc<Buffer>>,
     windows: HashMap<WindowId, Arc<Window>>,
+    target_id: WindowId,
+    instance: Arc<Instance>,
     render_queue: VecDeque<RenderCommand>,
     start_time: std::time::Instant,
+    device: Option<Device>,
+    queue: Option<Queue>,
+    surface_config: Option<SurfaceConfiguration>,
+    command_queue: RenderCommandQueue,
 }
 
 impl App {
     pub fn new(event_loop: &ActiveEventLoop, config: AppConfig) -> Self {
         let mut windows = HashMap::new();
-        let gpu: Arc<Gpu>;
+        let window = event_loop.create_window(config.window).unwrap();
+        let window_id = window.id();
+        let arc_win = Arc::new(window);
+        let arc_clone = arc_win.clone();
+        windows.insert(window_id, arc_win);
+        let instance = Arc::new(GPU::create_instance(config.gpu_config.backends));
 
-        match event_loop.create_window(config.window) {
-            Ok(window) => {
-                let window_id = window.id();
-
-                let arc_win = Arc::new(window);
-
-                let gpu_instance = pollster::block_on(Gpu::new(arc_win.clone(), config.gpu));
-                gpu = Arc::new(gpu_instance);
-
-                gpu.resume(&arc_win);
-
-                windows.insert(window_id, arc_win);
-            }
-            Err(e) => {
-                log_error!("Failed to create window: {}", e);
-                return Self {
-                    input: InputHandler::new(),
-                    gpu: None,
-                    bind_group: None,
-                    vertex_buffer: None,
-                    render_pipeline: None,
-                    windows,
-                    render_queue: VecDeque::new(),
-                    start_time: std::time::Instant::now(),
-                };
-            }
-        }
-
-        Self {
-            input: InputHandler::new(),
-            gpu: Some(gpu),
-            bind_group: None,
+        let mut app = Self {
             vertex_buffer: None,
-            render_pipeline: None,
+            instance,
+            render_pipelines: HashMap::default(),
             windows,
+            target_id: window_id,
             render_queue: VecDeque::new(),
             start_time: std::time::Instant::now(),
-        }
-    }
-    fn generate_animated_triangle_command(&mut self, gpu: &Gpu) {
-        if self.render_pipeline.is_none() {
-            let pipeline = gpu.create_render_pipeline();
-            self.render_pipeline = Some(Arc::new(pipeline));
-
-            let transform_matrix: [[f32; 4]; 4] = nalgebra::Matrix4::identity().into();
-            let transform_buffer =
-                gpu.device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Transform Buffer"),
-                        contents: bytemuck::cast_slice(&transform_matrix),
-                        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-                    });
-
-            let bind_group_layout =
-                gpu.device
-                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: Some("Uniform Bind Group Layout"),
-                        entries: &[wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        }],
-                    });
-
-            let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: transform_buffer.as_entire_binding(),
-                }],
-                label: Some("Uniform Bind Group"),
-            });
-
-            self.bind_group = Some(bind_group);
-        }
-
-        let elapsed = self.start_time.elapsed().as_secs_f32();
-        let amplitude = 0.2;
-        let speed = 2.0;
-
-        let mut rng = rand::thread_rng();
-        let vertex_data: Vec<f32> = vec![
-            0.0,
-            0.5 + amplitude * (elapsed * speed).sin(),
-            0.0,
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-            -0.5,
-            -0.5 + amplitude * (elapsed * speed).cos(),
-            0.0,
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-            0.5,
-            -0.5 + amplitude * (elapsed * speed).sin(),
-            0.0,
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-            rng.gen::<f32>(),
-        ];
-
-        let vertex_buffer = gpu
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Animated Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertex_data),
-                usage: BufferUsages::VERTEX,
-            });
-
-        self.vertex_buffer = Some(Arc::new(vertex_buffer));
-
-        if let (Some(pipeline), Some(vertex_buffer)) = (&self.render_pipeline, &self.vertex_buffer)
-        {
-            let render_command =
-                RenderCommand::new_triangle(pipeline.clone(), vertex_buffer.clone());
-            self.render_queue.push_back(render_command);
-        }
+            device: None,
+            queue: None,
+            surface_config: None,
+            command_queue: RenderCommandQueue::new(),
+        };
+        app.initialize_rendering(&arc_clone).block_on();
+        app
     }
 
-    fn execute_render_commands(&mut self, gpu: &Gpu, window: &Window) {
-        if let Some(bind_group) = &self.bind_group {
-            while let Some(command) = self.render_queue.pop_front() {
-                gpu.render_with_command(&command, window, bind_group);
-            }
-        } else {
-            log_error!("Bind group is missing; rendering cannot proceed.");
-        }
+    /// Initializes the GPU, device, queue, surface, and render pipeline.
+    pub async fn initialize_rendering(&mut self, window: &Window) {
+        let instance = GPU::create_instance(GpuConfig::default().backends);
+        let surface = GPU::create_surface(&instance, window);
+
+        // Request an adapter and device asynchronously
+        let adapter = GPU::request_adapter(&instance, &surface).await;
+        let (device, queue) = GPU::request_device(&adapter, &GpuConfig::default()).await;
+
+        // Configure the surface
+        let surface_format = GPU::get_surface_format(&surface, &adapter);
+        let surface_config = GPU::default_surface_config(&surface, &adapter, window);
+        surface.configure(&device, &surface_config);
+
+        // Set up shaders and pipeline
+        let vertex_shader = RenderPipelineManager::create_shader_module(
+            &device,
+            include_str!("./rendering/shaders/vertex_shader.wgsl"),
+        )
+        .expect("Failed to create vertex shader module.");
+
+        let fragment_shader = RenderPipelineManager::create_shader_module(
+            &device,
+            include_str!("./rendering/shaders/fragment_shader.wgsl"),
+        )
+        .expect("Failed to create fragment shader module.");
+
+        let bind_group_layout = RenderPipelineManager::create_bind_group_layout(&device);
+        let pipeline_layout =
+            RenderPipelineManager::create_pipeline_layout(&device, &bind_group_layout);
+        let vertex_layout = RenderPipelineManager::define_vertex_layout();
+
+        let render_pipeline = RenderPipelineManager::create_render_pipeline(
+            &device,
+            &pipeline_layout,
+            &vertex_shader,
+            &fragment_shader,
+            vertex_layout,
+            surface_format,
+            wgpu::MultisampleState::default(),
+        )
+        .expect("Failed to create render pipeline.");
+
+        // Store initialized resources
+        self.device = Some(device);
+        self.queue = Some(queue);
+        self.surface_config = Some(surface_config);
+        self.render_pipelines
+            .insert("default_pipeline".to_string(), Arc::new(render_pipeline));
+    }
+
+    /// Executes the render commands within the render loop.
+    pub fn render(&mut self) {
+        // Ensure device, queue, and pipeline are available
+        let device = self.device.as_ref().expect("Device not initialized.");
+        let queue = self.queue.as_ref().expect("Queue not initialized.");
+        let window = self
+            .windows
+            .get(&self.target_id)
+            .expect("Target window not found");
+        let surface_config = self
+            .surface_config
+            .as_ref()
+            .expect("Surface configuration not initialized.");
+
+        let pipeline = self
+            .render_pipelines
+            .get("default_pipeline")
+            .expect("Render pipeline not found.")
+            .as_ref();
+        let surface = GPU::create_surface(&self.instance, window);
+        // Create a render frame and execute all commands
+        render_frame(
+            device,
+            pipeline,
+            queue,
+            &surface,
+            surface_config,
+            &mut self.command_queue.commands,
+            window,
+        );
     }
 }
 
 impl ApplicationHandler for AppState {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match self {
-            AppState::Run(app) => match event {
+            AppState::Initialized(app) => match event {
                 WindowEvent::CloseRequested => {
                     event_loop.exit();
                 }
                 WindowEvent::RedrawRequested => {
-                    let window = app.windows.get(&id).cloned();
-                    let gpu = app.gpu.as_ref().cloned();
-
-                    if let (Some(window), Some(gpu)) = (window, gpu) {
-                        app.generate_animated_triangle_command(&gpu);
-                        app.execute_render_commands(&gpu, &window);
+                    // Execute render on redraw request
+                    if let Some(window) = app.windows.get(&app.target_id) {
+                        log_debug!("Rendering to window: {:?}", window.id());
+                        // app.render();
                     }
                 }
-                WindowEvent::Resized(new_size) => {
-                    if let Some(gpu) = app.gpu.as_ref() {
-                        gpu.resize(new_size);
+                WindowEvent::Resized(_size) => {
+                    // Handle resizing the surface
+                    if let Some(device) = &app.device {
+                        if let Some(window) = app.windows.get(&app.target_id) {
+                            // let surface = GPU::create_surface(&app.instance, window);
+                            // let adapter = GPU::request_adapter(&app.instance, &surface).block_on();
+                            // GPU::resize_surface(&surface, device, window, &adapter);
+                        }
                     }
                 }
                 ev => {
                     log_debug!("Window event: {:?}", ev);
                 }
             },
-            AppState::Setup { .. } => {
+            AppState::Uninitialized { .. } => {
                 log_debug!("Received window event while uninitialized.");
+            }
+        }
+    }
+
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        match self {
+            AppState::Uninitialized { config } => {
+                let config = std::mem::take(config);
+                let app = App::new(event_loop, config);
+
+                *self = AppState::Initialized(app);
+            }
+            AppState::Initialized(app) => {
+                if let Some(target_window) = app.windows.get(&app.target_id) {
+                    log_debug!("Requesting redraw for ID: {:?}", app.target_id);
+                }
             }
         }
     }
@@ -306,53 +301,17 @@ impl ApplicationHandler for AppState {
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        if let AppState::Run(app) = self {
+        if let AppState::Initialized(app) = self {
             match event {
-                DeviceEvent::Key(event) => app.input.key(&event),
-                DeviceEvent::MouseMotion { delta } => app.input.mousemotion(delta),
+                DeviceEvent::Key(event) => InputHandler::key(&event),
+                DeviceEvent::MouseMotion { delta } => InputHandler::mousemotion(delta),
                 DeviceEvent::MouseWheel { delta } => {}
                 DeviceEvent::Button { button, state } => match state {
-                    winit::event::ElementState::Pressed => {
-                        if let Some(&window_id) = app.windows.keys().next() {
-                            if let Some(window) = app.windows.get(&window_id) {
-                                window.request_redraw();
-                            }
-                        }
-                    }
+                    winit::event::ElementState::Pressed => {}
                     winit::event::ElementState::Released => {}
                 },
                 _ => (),
             }
-        }
-    }
-
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        match self {
-            AppState::Setup { config } => {
-                let config = std::mem::take(config);
-                let app = App::new(event_loop, config);
-                *self = AppState::Run(app);
-            }
-            AppState::Run(app) => match event_loop.create_window(WindowAttributes::default()) {
-                Ok(window) => {
-                    let window_id = window.id();
-                    let window = Arc::new(window);
-                    app.windows.insert(window_id, window.clone());
-
-                    if let Some(gpu) = app.gpu.as_ref() {
-                        gpu.resume(&window);
-                        log_debug!("GPU resuming for ID: {:?}", window_id);
-                    }
-
-                    if let Some(accessed_window) = app.windows.get(&window_id) {
-                        accessed_window.request_redraw();
-                        log_debug!("Requesting redraw for ID: {:?}", window_id);
-                    }
-                }
-                Err(e) => {
-                    log_error!("Failed to resume event loop and create a window: {}", e);
-                }
-            },
         }
     }
 }

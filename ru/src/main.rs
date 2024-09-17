@@ -10,13 +10,9 @@ async fn main() -> Result<(), AppError> {
     {
         LogFactory::default().init()?;
     }
-
-    let evt_loop = winit::event_loop::EventLoop::new().map_err(|e| AppError::from(e))?;
-
-    let config = AppConfig::default();
-    let mut state = AppState::Setup { config };
-
-    evt_loop.run_app(&mut state).unwrap();
+    winit::event_loop::EventLoop::new()?.run_app(&mut AppState::Uninitialized {
+        config: AppConfig::default(),
+    })?;
 
     Ok(())
 }

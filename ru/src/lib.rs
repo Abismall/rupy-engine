@@ -23,25 +23,12 @@ macro_rules! log_info {
         log::info!($($arg)*);
     };
 }
-
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! log_debug {
-    ($($arg:tt)*) => {};
-}
-
 #[cfg(feature = "logging")]
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        log::error!($($arg)*);
+         log::error!($($arg)*);
     };
-}
-
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! log_error {
-    ($($arg:tt)*) => {};
 }
 
 #[cfg(feature = "logging")]

@@ -1,3 +1,5 @@
+pub(crate) mod command;
 pub(crate) mod gpu;
-pub(crate) mod render_command;
+pub(crate) mod pipeline;
+pub(crate) mod queue;
 pub(crate) mod shaders;

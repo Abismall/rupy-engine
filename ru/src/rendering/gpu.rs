@@ -1,14 +1,19 @@
+use std::collections::VecDeque;
+
 use crate::log_error;
 use nalgebra::Vector2;
-use std::sync::{Arc, Mutex};
 use wgpu::{
-    self, Adapter, Backends, DeviceDescriptor, Features, Instance, InstanceDescriptor, Limits,
-    MultisampleState, PresentMode, SurfaceConfiguration, TextureFormat,
+    self, Adapter, Backends, CommandBuffer, CommandEncoderDescriptor, Device, DeviceDescriptor,
+    Extent3d, Features, Instance, InstanceDescriptor, Limits, LoadOp, Operations, PresentMode,
+    Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, StoreOp, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor,
 };
-use winit::{dpi::PhysicalSize, window::Window};
+use winit::window::Window;
 
-use super::render_command::RenderCommand;
+use super::command::RenderCommand;
 
+/// Configuration for initializing a GPU
 #[derive(Clone)]
 pub struct GpuConfig {
     pub backends: Backends,
@@ -16,7 +21,6 @@ pub struct GpuConfig {
     pub device_limits: Limits,
     pub max_samples: u8,
 }
-
 impl Default for GpuConfig {
     fn default() -> Self {
         Self {
@@ -28,211 +32,62 @@ impl Default for GpuConfig {
     }
 }
 
-pub(crate) struct Gpu {
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
-    pub adapter: wgpu::Adapter,
-    pub surface: wgpu::Surface<'static>,
-    surface_size: Mutex<Vector2<u32>>,
-    config: Mutex<SurfaceConfiguration>,
-    format: TextureFormat,
-    samples: u32,
-    sample_state: MultisampleState,
-    target_msaa: Mutex<Option<wgpu::Texture>>,
-}
+pub struct GPU;
 
-impl Gpu {
-    pub async fn new(window: Arc<Window>, gpu_config: GpuConfig) -> Self {
-        let instance = Instance::new(InstanceDescriptor {
-            backends: gpu_config.backends,
+impl GPU {
+    /// Create an instance for GPU
+    pub fn create_instance(backends: Backends) -> Instance {
+        Instance::new(InstanceDescriptor {
+            backends,
             ..Default::default()
-        });
+        })
+    }
 
-        let surface = instance.create_surface(window.clone()).unwrap();
-        let adapter = instance
+    /// Create a rendering surface for the given window
+    pub fn create_surface<'a>(instance: &'a Instance, window: &'a Window) -> Surface<'a> {
+        instance.create_surface(window).unwrap()
+    }
+
+    /// Request a suitable GPU adapter
+    pub async fn request_adapter<'a>(instance: &Instance, surface: &Surface<'a>) -> Adapter {
+        instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
+                compatible_surface: Some(surface),
                 force_fallback_adapter: false,
             })
             .await
-            .expect("Failed to find a suitable GPU adapter!");
+            .expect("Failed to find a suitable GPU adapter!")
+    }
 
-        let (device, queue) = adapter
+    /// Request a device and queue from the adapter with the given configuration
+    pub async fn request_device(
+        adapter: &Adapter,
+        gpu_config: &GpuConfig,
+    ) -> (Device, wgpu::Queue) {
+        adapter
             .request_device(
                 &DeviceDescriptor {
-                    label: None,
+                    label: Some("Active Device"),
                     required_features: gpu_config.device_features,
-                    required_limits: gpu_config.device_limits.using_resolution(adapter.limits()),
+                    required_limits: gpu_config
+                        .device_limits
+                        .clone()
+                        .using_resolution(adapter.limits()),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
             .await
-            .expect("Failed to create a device!");
-
-        let surface_caps = surface.get_capabilities(&adapter);
-        let format = surface_caps.formats[0];
-
-        let samples = Gpu::determine_samples(gpu_config.max_samples, format, &adapter);
-
-        let config = Gpu::default_config(&surface, &adapter, &window);
-        let sample_state = MultisampleState {
-            count: samples,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        };
-
-        surface.configure(&device, &config);
-
-        Self {
-            device,
-            queue,
-            adapter,
-            surface,
-            surface_size: Default::default(),
-            config: Mutex::new(config),
-            format,
-            samples,
-            sample_state,
-            target_msaa: Default::default(),
-        }
+            .expect("Failed to create a device!")
     }
 
-    pub fn create_render_pipeline(&self) -> wgpu::RenderPipeline {
-        // Define the vertex buffer layout, including position and color
-        let vertex_layout = wgpu::VertexBufferLayout {
-            array_stride: (3 + 3) * std::mem::size_of::<f32>() as wgpu::BufferAddress, // 3 position + 3 color
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3, // Position attribute
-                },
-                wgpu::VertexAttribute {
-                    offset: 3 * std::mem::size_of::<f32>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3, // Color attribute
-                },
-            ],
-        };
-
-        // Load the shaders
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/shader.wgsl").into()),
-            });
-
-        // Create the pipeline layout
-        let pipeline_layout = self
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Pipeline Layout"),
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            });
-
-        // Create the render pipeline
-        self.device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("Pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[vertex_layout],
-                    compilation_options: Default::default(), // Attach the vertex buffer layout here
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: self.format,
-                        blend: Some(wgpu::BlendState::REPLACE),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: Default::default(),
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: self.sample_state,
-                multiview: None,
-                cache: None,
-            })
-    }
-    pub fn render_with_command(
-        &self,
-        command: &RenderCommand,
-        window: &Window,
-        bind_group: &wgpu::BindGroup,
-    ) {
-        let frame = match self.start_frame() {
-            Ok(texture) => texture,
-            Err(wgpu::SurfaceError::Outdated) => {
-                self.reconfigure(window);
-                match self.start_frame() {
-                    Ok(texture) => texture,
-                    Err(e) => {
-                        log_error!(
-                            "Failed to acquire frame texture after reconfiguration: {:?}",
-                            e
-                        );
-                        return;
-                    }
-                }
-            }
-            Err(e) => {
-                log_error!("Failed to acquire frame texture: {:?}", e);
-                return;
-            }
-        };
-
-        let view = frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let msaa_view = if self.samples > 1 {
-            let msaa_texture = self.create_msaa_texture();
-            Some(msaa_texture)
-        } else {
-            None
-        };
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Encoder"),
-            });
-
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("RenderPass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: msaa_view.as_ref().unwrap_or(&view),
-                    resolve_target: if self.samples > 1 { Some(&view) } else { None },
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            render_pass.set_bind_group(0, bind_group, &[]);
-
-            command.execute(&mut render_pass);
-        }
-
-        self.submit(vec![encoder.finish()]);
-        frame.present();
-        window.request_redraw();
+    /// Get the texture format of the surface
+    pub fn get_surface_format(surface: &Surface, adapter: &Adapter) -> TextureFormat {
+        surface.get_capabilities(adapter).formats[0]
     }
 
-    fn determine_samples(max_samples: u8, format: TextureFormat, adapter: &Adapter) -> u32 {
+    pub fn determine_samples(max_samples: u8, format: TextureFormat, adapter: &Adapter) -> u32 {
         let sample_flags = adapter.get_texture_format_features(format).flags;
         if max_samples >= 16
             && sample_flags.contains(wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X16)
@@ -254,127 +109,134 @@ impl Gpu {
             1
         }
     }
-    pub fn reconfigure(&self, window: &Window) {
-        let current_size = Self::compute_surface_size(window);
-        let config = Self::default_config(&self.surface, &self.adapter, window);
 
-        self.surface.configure(&self.device, &config);
-        self.update_surface_size(current_size);
-        self.resize(PhysicalSize::new(config.width, config.height));
-        self.update_config(config);
-    }
-
-    pub fn compute_surface_size(window: &Window) -> Vector2<u32> {
-        let window_size = window.inner_size();
-        Vector2::new(window_size.width.max(1), window_size.height.max(1))
-    }
-
-    pub fn default_config(
-        surface: &wgpu::Surface,
-        adapter: &wgpu::Adapter,
+    pub fn default_surface_config(
+        surface: &Surface,
+        adapter: &Adapter,
         window: &Window,
-    ) -> wgpu::SurfaceConfiguration {
-        let surface_size = Self::compute_surface_size(window);
-
+    ) -> SurfaceConfiguration {
+        let surface_size = GPU::compute_surface_size(window);
         let surface_caps = surface.get_capabilities(adapter);
 
-        wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_caps.formats[0],
             width: surface_size.x.max(1),
             height: surface_size.y.max(1),
             present_mode: PresentMode::Fifo,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 0,
+            desired_maximum_frame_latency: 1,
         }
     }
-    pub fn update_surface_size(&self, new_size: Vector2<u32>) {
-        *self
-            .surface_size
-            .lock()
-            .expect("Update Surface Size: failed to acquire mutex lock") = new_size;
+
+    /// Compute the surface size from the window dimensions
+    pub fn compute_surface_size(window: &Window) -> Vector2<u32> {
+        let window_size = window.inner_size();
+        Vector2::new(window_size.width.max(1), window_size.height.max(1))
     }
-    pub fn surface_size(&self) -> Vector2<u32> {
-        self.surface_size
-            .lock()
-            .expect("Surface Size: failed to acquire mutex lock")
-            .clone()
+
+    /// Resize the surface configuration based on the current window size
+    pub fn resize_surface(surface: &Surface, device: &Device, window: &Window, adapter: &Adapter) {
+        // Get the current size of the window
+        let new_size = window.inner_size();
+
+        // Create a new configuration with the updated size
+        let mut config = GPU::default_surface_config(surface, adapter, window);
+        config.width = new_size.width.max(1); // Ensure width is at least 1
+        config.height = new_size.height.max(1); // Ensure height is at least 1
+
+        // Reconfigure the surface with the updated configuration
+        surface.configure(device, &config);
     }
-    pub fn update_config(&self, config: SurfaceConfiguration) {
-        *self
-            .config
-            .lock()
-            .expect("Update Config: failed to acquire mutex lock") = config;
+
+    /// Submit the command buffers to the queue
+    pub fn submit(queue: &wgpu::Queue, command_buffers: Vec<CommandBuffer>) {
+        queue.submit(command_buffers);
     }
-    pub fn samples(&self) -> u32 {
-        self.samples
-    }
-    fn create_msaa_texture(&self) -> wgpu::TextureView {
-        let size = self.surface_size();
-        #[cfg(feature = "logging")]
-        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("MSAAtexture"),
-            size: wgpu::Extent3d {
-                width: size.x,
-                height: size.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: self.samples,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
+}
+
+pub fn render_frame(
+    device: &Device,
+    pipeline: &RenderPipeline,
+    queue: &Queue,
+    surface: &Surface,
+    surface_config: &SurfaceConfiguration,
+    command_queue: &mut VecDeque<RenderCommand>,
+    window: &Window,
+) {
+    // Acquire the next frame from the surface.
+    let frame = match surface.get_current_texture() {
+        Ok(frame) => frame,
+        Err(e) => {
+            log_error!("Failed to acquire next swap chain texture: {:?}", e);
+            return;
+        }
+    };
+
+    // Create a texture view for the current frame.
+    let view = frame.texture.create_view(&TextureViewDescriptor::default());
+
+    // Create a depth texture with the same device used for other operations.
+    let depth_texture = device.create_texture(&TextureDescriptor {
+        label: Some("Depth Texture"),
+        size: Extent3d {
+            width: surface_config.width,
+            height: surface_config.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Depth32Float,
+        usage: TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+
+    // Create a view for the depth texture.
+    let depth_view = depth_texture.create_view(&TextureViewDescriptor::default());
+
+    // Create a command encoder with the same device.
+    let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+        label: Some("Render Encoder"),
+    });
+
+    // Begin a render pass using the correct device context.
+    {
+        let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(wgpu::Color::BLACK), // Clear to black
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &depth_view,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0), // Clear depth to far (maximum value)
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
-        texture.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
-    pub fn update_msaa(&self, size: Vector2<u32>) {
-        let mut target_msaa = self
-            .target_msaa
-            .lock()
-            .expect("Update MSAA: failed to acquire mutex lock");
-
-        if self.samples() > 1 && (size != self.surface_size() || target_msaa.is_none()) {
-            let msaa_texture = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("MSAA Texture"),
-                size: wgpu::Extent3d {
-                    width: size.x,
-                    height: size.y,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: self.samples(),
-                dimension: wgpu::TextureDimension::D2,
-                format: self.format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
-
-            *target_msaa = Some(msaa_texture);
+        // Execute all commands from the queue using the render pass.
+        for command in command_queue.iter() {
+            command.execute(&mut render_pass, pipeline);
         }
-    }
+    } // The render pass ends here when the scope ends.
 
-    pub fn resume(&self, window: &Window) {
-        let config = Self::default_config(&self.surface, &self.adapter, &window);
-        self.update_msaa(Vector2::new(config.width, config.height));
-        self.reconfigure(window);
-    }
+    // Submit the command encoder commands to the queue.
+    queue.submit(std::iter::once(encoder.finish()));
 
-    pub fn resize(&self, new_size: winit::dpi::PhysicalSize<u32>) {
-        let mut config = self.config.lock().unwrap();
-        config.width = new_size.width.max(1);
-        config.height = new_size.height.max(1);
-        self.surface.configure(&self.device, &config);
-    }
+    // Present the frame to the screen.
+    frame.present();
 
-    pub fn start_frame(&self) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
-        self.surface.get_current_texture()
-    }
-
-    pub fn submit(&self, command_buffers: Vec<wgpu::CommandBuffer>) {
-        self.queue.submit(command_buffers);
-    }
+    // Request another redraw to continue rendering.
+    window.request_redraw();
 }

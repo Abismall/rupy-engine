@@ -4,13 +4,10 @@ use winit::event::RawKeyEvent;
 pub struct InputHandler;
 
 impl InputHandler {
-    pub fn new() -> Self {
-        Self
+    pub fn mousemotion(delta: (f64, f64)) {
+        MouseMovementDetails::new(delta);
     }
-    pub fn mousemotion(&mut self, delta: (f64, f64)) {
-        let movement = MouseMovementDetails::new(delta);
-    }
-    pub fn key(&mut self, event: &RawKeyEvent) {
+    pub fn key(event: &RawKeyEvent) {
         match event.physical_key {
             winit::keyboard::PhysicalKey::Code(key_code) => {
                 log_debug!("Received input: {:?}", key_code);
