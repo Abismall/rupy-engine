@@ -1,6 +1,9 @@
 use nalgebra::Matrix4;
 
-use super::{traits::Renderable, vertex::Vertex};
+use crate::graphics::vertex::Vertex;
+
+use super::traits::Renderable;
+
 pub struct ShadedSphere {
     pub vertices: Vec<Vertex>,      // A Vec to hold vertices
     pub indices: Vec<u32>,          // A Vec to hold indices

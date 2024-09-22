@@ -1,6 +1,9 @@
 use nalgebra::Matrix4;
 
-use super::{traits::Renderable, vertex::Vertex};
+use crate::graphics::vertex::Vertex;
+
+use super::traits::Renderable;
+
 pub struct ShadedRectangle {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

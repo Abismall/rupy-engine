@@ -1,34 +1,17 @@
 use nalgebra::Vector2;
 use wgpu::{
-    Adapter, Backends, CompositeAlphaMode, Device, DeviceDescriptor, Features, Instance,
-    InstanceDescriptor, Limits, PresentMode, Surface, SurfaceConfiguration, TextureFormat,
-    TextureUsages,
+    Adapter, Backends, CompositeAlphaMode, Device, DeviceDescriptor, Instance, InstanceDescriptor,
+    PresentMode, Surface, SurfaceConfiguration, TextureFormat, TextureUsages,
 };
-use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position};
-use winit::window::{Fullscreen, WindowAttributes};
+use winit::{
+    dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position},
+    window::{Fullscreen, Window, WindowAttributes},
+};
 
-use winit::window::Window;
+use crate::app::gpu::GPU;
 
-use super::constants::defaults::TITLE;
-
-#[derive(Clone)]
-pub struct GPU {
-    pub backends: Backends,
-    pub device_features: Features,
-    pub device_limits: Limits,
-    pub max_samples: u8,
-}
-
-impl Default for GPU {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            device_features: Features::empty(),
-            device_limits: Limits::downlevel_webgl2_defaults(),
-            max_samples: 4,
-        }
-    }
-}
+pub mod logger;
+pub mod metrics;
 
 pub fn wgpu_default_instance(backends: Backends) -> Instance {
     Instance::new(InstanceDescriptor {
@@ -36,6 +19,14 @@ pub fn wgpu_default_instance(backends: Backends) -> Instance {
         ..Default::default()
     })
 }
+
+pub const TITLE: &str = "RuPy";
+pub const SIZE_SMALL_F64: (f64, f64) = (400.0, 300.0);
+pub const SIZE_MEDIUM_F64: (f64, f64) = (800.0, 600.0);
+pub const SIZE_LARGE_F64: (f64, f64) = (1280.0, 720.0);
+pub const SIZE_SMALL_U32: (u32, u32) = (400, 300);
+pub const SIZE_MEDIUM_U32: (u32, u32) = (800, 600);
+pub const SIZE_LARGE_U32: (u32, u32) = (1280, 720);
 
 pub async fn instance_request_adapter(
     instance: &Instance,

@@ -1,48 +1,44 @@
 use crate::input::handler::InputHandler;
 use crate::input::handler::InputListener;
+use crate::menu::menu::Menu;
+use crate::menu::wrapper::MenuWrapper;
+use crate::utilities::adapter_request_device;
+use crate::utilities::instance_request_adapter;
+use crate::utilities::logger::LogFactory;
 
 use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Viewport,
 };
 use pollster::FutureExt;
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::Arc;
 use wgpu::{
-    rwh::HasDisplayHandle, CommandEncoderDescriptor, CompositeAlphaMode, Instance,
-    InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode,
-    RenderPassColorAttachment, RenderPassDescriptor, SurfaceConfiguration, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    CommandEncoderDescriptor, CompositeAlphaMode, Instance, InstanceDescriptor, LoadOp,
+    MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor,
+    SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor,
 };
-use winit::event::WindowEvent;
-use winit::window::{Window, WindowAttributes};
+use winit::window::Window;
 
-use super::constants::defaults::TITLE;
-use super::instance::{
-    adapter_request_device, default_window_attributes, instance_request_adapter, GPU,
-};
-use super::logger::LogFactory;
-use super::menu::{Menu, MenuWrapper};
-use super::views::{main_menu, MainMenu};
+use super::gpu::GPU;
 
 pub(crate) struct ApplicationState {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    surface: wgpu::Surface<'static>,
-    surface_config: SurfaceConfiguration,
-    font_system: FontSystem,
-    swash_cache: SwashCache,
-    viewport: glyphon::Viewport,
-    atlas: glyphon::TextAtlas,
-    text_renderer: glyphon::TextRenderer,
-    text_buffer: glyphon::Buffer,
-    gpu: GPU,
-    window: Arc<Window>,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
+    pub(crate) surface: wgpu::Surface<'static>,
+    pub(crate) surface_config: SurfaceConfiguration,
+    pub(crate) font_system: FontSystem,
+    pub(crate) swash_cache: SwashCache,
+    pub(crate) viewport: glyphon::Viewport,
+    pub(crate) atlas: glyphon::TextAtlas,
+    pub(crate) text_renderer: glyphon::TextRenderer,
+    pub(crate) text_buffer: glyphon::Buffer,
+    pub(crate) gpu: GPU,
+    pub(crate) window: Arc<Window>,
 }
 
 impl ApplicationState {
-    async fn new(window: Arc<Window>, gpu: GPU) -> Self {
+    pub(crate) async fn new(window: Arc<Window>, gpu: GPU) -> Self {
         let physical_size = window.inner_size();
-        let window_attributes = default_window_attributes(None, None);
 
         let instance = Instance::new(InstanceDescriptor::default());
         let adapter = instance_request_adapter(
@@ -186,116 +182,3 @@ impl ApplicationState {
         self.atlas.trim();
     }
 }
-impl winit::application::ApplicationHandler for Rupy {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        if self.state.is_some() {
-            return;
-        } else {
-            self.state = Some(pollster::block_on(ApplicationState::new(
-                Arc::new(
-                    event_loop
-                        .create_window(Window::default_attributes())
-                        .unwrap(),
-                ),
-                GPU::default(),
-            )));
-        }
-    }
-
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        event: WindowEvent,
-    ) {
-        if let Some(ref mut state) = self.state {
-            if state.window.display_handle().is_ok() {
-                match event {
-                    WindowEvent::Resized(size) => {
-                        state.surface_config.width = size.width;
-                        state.surface_config.height = size.height;
-                        state
-                            .surface
-                            .configure(&state.device, &state.surface_config);
-
-                        state.window.request_redraw();
-                    }
-                    WindowEvent::RedrawRequested => {
-                        state.set_text(
-                            "️Hello world! 👋",
-                            glyphon::Metrics {
-                                font_size: 42.0,
-                                line_height: 22.0,
-                            },
-                            Family::SansSerif,
-                        );
-                        let _ = state.render();
-                    }
-                    WindowEvent::CloseRequested => {
-                        event_loop.exit();
-                    }
-                    _ => {}
-                }
-            } else {
-                self.initialize_state(Arc::new(
-                    event_loop
-                        .create_window(WindowAttributes::default())
-                        .expect("Create Window"),
-                ));
-            }
-        }
-    }
-}
-
-pub struct Rupy {
-    state: Option<ApplicationState>,
-    #[cfg(feature = "logging")]
-    pub logger: Option<LogFactory>,
-    input: InputHandler,
-    menu: Rc<RefCell<Menu<MainMenu, &'static str>>>,
-}
-
-impl Rupy {
-    pub const TITLE: &str = TITLE;
-
-    pub fn new() -> Self {
-        let mut input = InputHandler::new();
-        let menu = Rc::new(RefCell::new(main_menu()));
-        menu.borrow_mut().activate();
-
-        input.add_listener(Box::new(MenuWrapper::new(menu.clone())) as Box<dyn InputListener>);
-
-        Rupy {
-            #[cfg(feature = "logging")]
-            logger: Some(Default::default()),
-            input,
-            state: None,
-            menu,
-        }
-    }
-
-    pub fn initialize_state(&mut self, window: Arc<Window>) {
-        let state = pollster::block_on(ApplicationState::new(window, GPU::default()));
-        self.state = Some(state);
-    }
-    pub fn window(mut self, window: Arc<Window>) -> Self {
-        if let Some(ref mut state) = self.state {
-            state.window = window;
-        }
-        self // Return the modified self
-    }
-
-    pub fn gpu(mut self, gpu: GPU) -> Self {
-        if let Some(ref mut state) = self.state {
-            state.gpu = gpu;
-        }
-        self // Return the modified self
-    }
-
-    #[cfg(feature = "logging")]
-    pub fn logger(mut self, logger: Option<crate::core::logger::LogFactory>) -> Self {
-        self.logger = logger;
-        self
-    }
-}
-// "Hello world! 👋",

@@ -1,6 +1,6 @@
 use nalgebra::Matrix4;
 
-use super::vertex::Vertex;
+use crate::graphics::vertex::Vertex;
 
 pub struct Cube {
     pub vertices: Vec<Vertex>,

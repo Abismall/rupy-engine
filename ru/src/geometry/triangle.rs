@@ -1,9 +1,8 @@
 use nalgebra::Matrix4;
 
-use super::{
-    traits::Renderable,
-    vertex::{TexturedVertex, Vertex},
-};
+use crate::graphics::vertex::{TexturedVertex, Vertex};
+
+use super::traits::Renderable;
 
 pub struct ShadedTriangle {
     model_matrix: Matrix4<f32>,

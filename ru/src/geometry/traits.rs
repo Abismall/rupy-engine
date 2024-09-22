@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;
 
-use super::vertex::{TexturedVertex, Vertex};
+use crate::graphics::vertex::{TexturedVertex, Vertex};
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]

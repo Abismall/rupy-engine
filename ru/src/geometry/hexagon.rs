@@ -1,6 +1,7 @@
 use nalgebra::Matrix4;
 
-use super::vertex::Vertex;
+use crate::graphics::vertex::Vertex;
+
 pub struct Hexagon {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
