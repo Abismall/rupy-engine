@@ -16,15 +16,18 @@ env_logger = { version = "0.11.5", optional = true }
 bytemuck = { version = "1.2.0-alpha.1", features = ["derive"] }
 rand = "0.8.5"
 glyphon = "0.6.0"
+serde = { version = "1.0.210", features = ["derive"], optional = true }
+serde_derive = { version = "1.0.210", optional = true }
+image = "0.25.2"
 
 
 
 
 [features]
-default = ["logging"]
+default = ["logging", "serialize"]
 logging = ["env_logger", "log"]
 
-
+serialize = ["serde", "serde_derive"]
 
 [lib]
 path = "src/lib.rs"

@@ -1,12 +1,16 @@
-pub(crate) mod constants;
 pub(crate) mod core;
-pub(crate) mod library;
+
+pub(crate) mod graphics;
+pub(crate) mod input;
+
+pub(crate) mod math;
+
+pub(crate) mod object;
 pub(crate) mod shader;
-use core::{application, error};
-pub use error::AppError;
 
 #[cfg(feature = "logging")]
 pub use crate::core::logger as rupyLogger;
+use core::application;
 
 #[cfg(feature = "logging")]
 #[macro_export]
@@ -44,3 +48,4 @@ macro_rules! log_error {
 }
 
 pub use application::Rupy;
+pub use core::error::AppError;

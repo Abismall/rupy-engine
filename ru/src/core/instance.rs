@@ -7,8 +7,9 @@ use wgpu::{
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position};
 use winit::window::{Fullscreen, WindowAttributes};
 
-use crate::constants::defaults::TITLE;
 use winit::window::Window;
+
+use super::constants::defaults::TITLE;
 
 #[derive(Clone)]
 pub struct GPU {
@@ -24,7 +25,7 @@ impl Default for GPU {
             backends: Backends::all(),
             device_features: Features::empty(),
             device_limits: Limits::downlevel_webgl2_defaults(),
-            max_samples: 1,
+            max_samples: 4,
         }
     }
 }

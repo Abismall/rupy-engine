@@ -1,12 +1,11 @@
-use crate::{core::input::InputListener, log_debug};
+use std::{cell::RefCell, rc::Rc};
 
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
-
+use crate::{input::handler::InputListener, log_debug};
+use std::fmt::Debug;
 use winit::{
     event::{ElementState, RawKeyEvent, WindowEvent},
     keyboard::KeyCode,
 };
-
 #[derive(Clone, Copy, Debug)]
 pub struct MenuItem<T, L> {
     pub label: L,
@@ -54,7 +53,6 @@ where
     }
 
     pub fn render(&self) {
-        println!("Menu:");
         for (index, item) in self.items.iter().enumerate() {
             if self.selected == index {
                 log_debug!("> {:?}. {:?}", index + 1, item.label);
@@ -131,6 +129,7 @@ where
         log_debug!("Menu mouse button: {} state: {:?}", button, state);
     }
 }
+
 pub struct MenuWrapper<T, L>
 where
     L: Debug,

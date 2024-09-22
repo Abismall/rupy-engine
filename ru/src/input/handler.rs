@@ -18,45 +18,28 @@ impl InputHandler {
     }
 
     pub fn add_listener(&mut self, listener: Box<dyn InputListener>) {
-        if !self.listener_exists(&*listener) {
-            self.listeners.push(listener);
-        }
+        self.listeners.push(listener);
     }
 
-    pub fn listener_exists(&self, listener: &dyn InputListener) -> bool {
-        self.listeners.iter().any(|l| std::ptr::eq(&**l, listener))
-    }
-
-    pub fn remove_listener(&mut self, listener: &dyn InputListener) -> bool {
-        if let Some(index) = self
-            .listeners
-            .iter()
-            .position(|l| std::ptr::eq(&**l, listener))
-        {
-            self.listeners.remove(index);
-            true
-        } else {
-            false
-        }
-    }
-    pub fn key(&mut self, event: &RawKeyEvent) {
-        for listener in &mut self.listeners {
+    pub fn handle_input(&mut self, event: &RawKeyEvent) {
+        for listener in self.listeners.iter_mut() {
             listener.on_key_event(event);
         }
     }
 
-    pub fn mousemotion(&mut self, delta: (f64, f64)) {
-        for listener in &mut self.listeners {
+    pub fn handle_mouse_motion(&mut self, delta: (f64, f64)) {
+        for listener in self.listeners.iter_mut() {
             listener.on_mouse_motion(delta);
         }
     }
 
-    pub fn mouse_button(&mut self, button: u32, state: winit::event::ElementState) {
-        for listener in &mut self.listeners {
+    pub fn handle_mouse_button(&mut self, button: u32, state: ElementState) {
+        for listener in self.listeners.iter_mut() {
             listener.on_mouse_button(button, state);
         }
     }
 }
+
 #[derive(Debug)]
 struct MouseMovementDetails {
     direction: String,

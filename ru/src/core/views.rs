@@ -1,4 +1,4 @@
-use crate::core::menu::{Menu, MenuItem};
+use super::menu::{Menu, MenuItem};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MainMenu {

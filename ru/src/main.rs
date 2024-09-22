@@ -2,6 +2,7 @@ extern crate rupy;
 
 #[cfg(feature = "logging")]
 use rupy::rupyLogger::LogFactory;
+
 use rupy::{AppError, Rupy};
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]

@@ -1,3 +1,6 @@
+use crate::input::handler::InputHandler;
+use crate::input::handler::InputListener;
+
 use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Resolution, Shaping, SwashCache, TextArea,
     TextAtlas, TextBounds, TextRenderer, Viewport,
@@ -10,31 +13,22 @@ use wgpu::{
     RenderPassColorAttachment, RenderPassDescriptor, SurfaceConfiguration, TextureFormat,
     TextureUsages, TextureViewDescriptor,
 };
-use winit::{
-    event::WindowEvent,
-    window::{Window, WindowAttributes},
-};
+use winit::event::WindowEvent;
+use winit::window::{Window, WindowAttributes};
 
-use crate::{
-    constants::defaults::TITLE,
-    core::instance::{
-        adapter_request_device, default_window_attributes, instance_request_adapter, GPU,
-    },
+use super::constants::defaults::TITLE;
+use super::instance::{
+    adapter_request_device, default_window_attributes, instance_request_adapter, GPU,
 };
-
-use super::{
-    input::InputHandler,
-    logger::LogFactory,
-    menu::{Menu, MenuWrapper},
-    views::{main_menu, MainMenu},
-};
+use super::logger::LogFactory;
+use super::menu::{Menu, MenuWrapper};
+use super::views::{main_menu, MainMenu};
 
 pub(crate) struct ApplicationState {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     surface_config: SurfaceConfiguration,
-    window_attributes: winit::window::WindowAttributes,
     font_system: FontSystem,
     swash_cache: SwashCache,
     viewport: glyphon::Viewport,
@@ -46,15 +40,9 @@ pub(crate) struct ApplicationState {
 }
 
 impl ApplicationState {
-    async fn new(
-        window: Arc<Window>,
-        gpu: GPU,
-        title: Option<&str>,
-        font_size: Option<f32>,
-        line_height: Option<f32>,
-    ) -> Self {
+    async fn new(window: Arc<Window>, gpu: GPU) -> Self {
         let physical_size = window.inner_size();
-        let window_attributes = default_window_attributes(None, title);
+        let window_attributes = default_window_attributes(None, None);
 
         let instance = Instance::new(InstanceDescriptor::default());
         let adapter = instance_request_adapter(
@@ -91,15 +79,10 @@ impl ApplicationState {
         let text_renderer =
             TextRenderer::new(&mut atlas, &mut device, MultisampleState::default(), None);
 
-        let f_size = match font_size {
-            Some(size) => size,
-            None => 32.0 as f32,
-        };
-        let l_height = match line_height {
-            Some(height) => height,
-            None => 42.0 as f32,
-        };
-        let text_buffer = Buffer::new(&mut font_system, glyphon::Metrics::new(f_size, l_height));
+        let text_buffer = Buffer::new(
+            &mut font_system,
+            glyphon::Metrics::new(32.0 as f32, 42.0 as f32),
+        );
 
         Self {
             device,
@@ -113,8 +96,6 @@ impl ApplicationState {
             text_renderer,
             text_buffer,
             window,
-            window_attributes,
-
             gpu,
         }
     }
@@ -209,21 +190,16 @@ impl winit::application::ApplicationHandler for Rupy {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         if self.state.is_some() {
             return;
+        } else {
+            self.state = Some(pollster::block_on(ApplicationState::new(
+                Arc::new(
+                    event_loop
+                        .create_window(Window::default_attributes())
+                        .unwrap(),
+                ),
+                GPU::default(),
+            )));
         }
-
-        let window_attributes: winit::window::WindowAttributes = Window::default_attributes();
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let gpu = GPU::default();
-        self.state = Some(
-            Some(pollster::block_on(ApplicationState::new(
-                window,
-                gpu,
-                Some(Rupy::TITLE),
-                None,
-                None,
-            )))
-            .expect("Application State"),
-        );
     }
 
     fn window_event(
@@ -246,10 +222,10 @@ impl winit::application::ApplicationHandler for Rupy {
                     }
                     WindowEvent::RedrawRequested => {
                         state.set_text(
-                            "Hello world! 👋🦁",
+                            "️Hello world! 👋",
                             glyphon::Metrics {
-                                font_size: 30.0,
-                                line_height: 42.0,
+                                font_size: 42.0,
+                                line_height: 22.0,
                             },
                             Family::SansSerif,
                         );
@@ -287,7 +263,7 @@ impl Rupy {
         let menu = Rc::new(RefCell::new(main_menu()));
         menu.borrow_mut().activate();
 
-        input.add_listener(Box::new(MenuWrapper::new(menu.clone())));
+        input.add_listener(Box::new(MenuWrapper::new(menu.clone())) as Box<dyn InputListener>);
 
         Rupy {
             #[cfg(feature = "logging")]
@@ -299,21 +275,21 @@ impl Rupy {
     }
 
     pub fn initialize_state(&mut self, window: Arc<Window>) {
-        let state = pollster::block_on(ApplicationState::new(
-            window,
-            GPU::default(),
-            Some(Rupy::TITLE),
-            None,
-            None,
-        ));
+        let state = pollster::block_on(ApplicationState::new(window, GPU::default()));
         self.state = Some(state);
     }
-    pub fn window(self, window: Arc<Window>) {
-        self.state.unwrap().window = window;
+    pub fn window(mut self, window: Arc<Window>) -> Self {
+        if let Some(ref mut state) = self.state {
+            state.window = window;
+        }
+        self // Return the modified self
     }
 
-    pub fn gpu(self, gpu: GPU) {
-        self.state.unwrap().gpu = gpu;
+    pub fn gpu(mut self, gpu: GPU) -> Self {
+        if let Some(ref mut state) = self.state {
+            state.gpu = gpu;
+        }
+        self // Return the modified self
     }
 
     #[cfg(feature = "logging")]
@@ -322,3 +298,4 @@ impl Rupy {
         self
     }
 }
+// "Hello world! 👋",
