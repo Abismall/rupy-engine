@@ -8,10 +8,10 @@ use winit::{
     window::{Fullscreen, Window, WindowAttributes},
 };
 
-use crate::app::gpu::GPU;
+use crate::config::cfg::GpuConfig;
 
+pub mod debug;
 pub mod logger;
-pub mod metrics;
 
 pub fn wgpu_default_instance(backends: Backends) -> Instance {
     Instance::new(InstanceDescriptor {
@@ -46,7 +46,7 @@ pub async fn instance_request_adapter(
 
 pub async fn adapter_request_device(
     adapter: &Adapter,
-    gpu: &GPU,
+    gpu: &GpuConfig,
     memory_hints: wgpu::MemoryHints,
 ) -> (Device, wgpu::Queue) {
     adapter
@@ -108,11 +108,6 @@ pub fn default_surface_configuration(
         surface_caps.formats.to_vec(),
         1,
     )
-}
-
-pub fn surface_capabilities(surface: &Surface, adapter: &Adapter) -> TextureFormat {
-    let surface_caps = surface.get_capabilities(adapter);
-    surface_caps.formats[0]
 }
 
 pub fn configure_surface(window: &Window, surface: &Surface, adapter: &Adapter, device: &Device) {

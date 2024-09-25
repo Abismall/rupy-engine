@@ -1,21 +1,12 @@
 use std::fmt;
+use std::ops::{Add, Div, Mul, Rem, Sub};
 
 pub trait GetValue {
     fn get(&self) -> u32;
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Width(u32);
-
-impl Width {
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    pub fn set(&mut self, value: u32) {
-        self.0 = value;
-    }
-}
+pub struct Width(pub u32);
 
 impl GetValue for Width {
     fn get(&self) -> u32 {
@@ -29,9 +20,24 @@ impl Default for Width {
     }
 }
 
+// Implement From<u32> for Width
 impl From<u32> for Width {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+// Implement From<Width> for u32
+impl From<Width> for u32 {
+    fn from(width: Width) -> u32 {
+        width.0
+    }
+}
+
+// Implement From<Width> for f32
+impl From<Width> for f32 {
+    fn from(width: Width) -> f32 {
+        width.0 as f32
     }
 }
 
@@ -42,17 +48,7 @@ impl fmt::Display for Width {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Height(u32);
-
-impl Height {
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    pub fn set(&mut self, value: u32) {
-        self.0 = value;
-    }
-}
+pub struct Height(pub u32);
 
 impl GetValue for Height {
     fn get(&self) -> u32 {
@@ -66,9 +62,24 @@ impl Default for Height {
     }
 }
 
+// Implement From<u32> for Height
 impl From<u32> for Height {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+// Implement From<Height> for u32
+impl From<Height> for u32 {
+    fn from(height: Height) -> u32 {
+        height.0
+    }
+}
+
+// Implement From<Height> for f32
+impl From<Height> for f32 {
+    fn from(height: Height) -> f32 {
+        height.0 as f32
     }
 }
 
@@ -80,16 +91,6 @@ impl fmt::Display for Height {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Depth(u32);
-
-impl Depth {
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    pub fn set(&mut self, value: u32) {
-        self.0 = value;
-    }
-}
 
 impl GetValue for Depth {
     fn get(&self) -> u32 {
@@ -103,22 +104,31 @@ impl Default for Depth {
     }
 }
 
+// Implement From<u32> for Depth
 impl From<u32> for Depth {
     fn from(value: u32) -> Self {
         Self(value)
     }
 }
 
-impl fmt::Display for Depth {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.get())
+// Implement From<Depth> for u32
+impl From<Depth> for u32 {
+    fn from(depth: Depth) -> u32 {
+        depth.0
+    }
+}
+
+// Implement From<Depth> for f32
+impl From<Depth> for f32 {
+    fn from(depth: Depth) -> f32 {
+        depth.0 as f32
     }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Size2D {
-    width: Width,
-    height: Height,
+    pub width: Width,
+    pub height: Height,
 }
 
 impl Size2D {
@@ -154,8 +164,8 @@ impl fmt::Display for Size2D {
 
 #[derive(Clone, Debug, Default)]
 pub struct Size3D {
-    size_2d: Size2D,
-    depth: Depth,
+    pub size_2d: Size2D,
+    pub depth: Depth,
 }
 
 impl Size3D {
@@ -191,14 +201,167 @@ impl Size3D {
     }
 }
 
-impl fmt::Display for Size3D {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Size3D (Width: {}, Height: {}, Depth: {})",
-            self.width(),
-            self.height(),
-            self.depth()
-        )
+impl Width {
+    pub fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub fn set(&mut self, value: u32) {
+        self.0 = value;
+    }
+}
+
+// Implement Add trait for Width
+impl Add for Width {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        Self(self.0 + other.0)
+    }
+}
+
+// Implement Sub trait for Width
+impl Sub for Width {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        Self(self.0 - other.0)
+    }
+}
+
+// Implement Mul trait for Width
+impl Mul for Width {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        Self(self.0 * other.0)
+    }
+}
+
+// Implement Div trait for Width
+impl Div for Width {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self::Output {
+        Self(self.0 / other.0)
+    }
+}
+
+// Implement Rem trait for Width
+impl Rem for Width {
+    type Output = Self;
+
+    fn rem(self, other: Self) -> Self::Output {
+        Self(self.0 % other.0)
+    }
+}
+
+impl Height {
+    pub fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub fn set(&mut self, value: u32) {
+        self.0 = value;
+    }
+}
+
+// Implement Add trait for Height
+impl Add for Height {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        Self(self.0 + other.0)
+    }
+}
+
+// Implement Sub trait for Height
+impl Sub for Height {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        Self(self.0 - other.0)
+    }
+}
+
+// Implement Mul trait for Height
+impl Mul for Height {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        Self(self.0 * other.0)
+    }
+}
+
+// Implement Div trait for Height
+impl Div for Height {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self::Output {
+        Self(self.0 / other.0)
+    }
+}
+
+// Implement Rem trait for Height
+impl Rem for Height {
+    type Output = Self;
+
+    fn rem(self, other: Self) -> Self::Output {
+        Self(self.0 % other.0)
+    }
+}
+
+impl Depth {
+    pub fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub fn set(&mut self, value: u32) {
+        self.0 = value;
+    }
+}
+
+// Implement Add trait for Depth
+impl Add for Depth {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        Self(self.0 + other.0)
+    }
+}
+
+// Implement Sub trait for Depth
+impl Sub for Depth {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        Self(self.0 - other.0)
+    }
+}
+
+// Implement Mul trait for Depth
+impl Mul for Depth {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        Self(self.0 * other.0)
+    }
+}
+
+// Implement Div trait for Depth
+impl Div for Depth {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self::Output {
+        Self(self.0 / other.0)
+    }
+}
+
+// Implement Rem trait for Depth
+impl Rem for Depth {
+    type Output = Self;
+
+    fn rem(self, other: Self) -> Self::Output {
+        Self(self.0 % other.0)
     }
 }

@@ -1,9 +1,10 @@
-use crate::{input::handler::InputListener, log_debug};
 use std::fmt::Debug;
 use winit::{
-    event::{ElementState, RawKeyEvent, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, RawKeyEvent, WindowEvent},
     keyboard::KeyCode,
 };
+
+use crate::{input::InputListener, log_debug};
 
 use super::item::MenuItem;
 
@@ -80,7 +81,7 @@ where
     T: Debug,
     L: Debug,
 {
-    fn on_key_event(&mut self, event: &RawKeyEvent) {
+    fn on_key_event(&mut self, event: &KeyEvent) {
         match event.physical_key {
             winit::keyboard::PhysicalKey::Code(key_code) => {
                 log_debug!("Menu received key code: {:?}", key_code);
@@ -111,7 +112,11 @@ where
         log_debug!("Menu mouse motion: {:?}", delta);
     }
 
-    fn on_mouse_button(&mut self, button: u32, state: ElementState) {
-        log_debug!("Menu mouse button: {} state: {:?}", button, state);
+    fn on_mouse_button(&mut self, button: MouseButton, state: ElementState) {
+        log_debug!("Menu mouse button: {:?} state: {:?}", button, state);
+    }
+
+    fn on_scroll(&mut self, delta: winit::event::MouseScrollDelta) {
+        log_debug!("Menu mouse scroll: {:?}", delta);
     }
 }

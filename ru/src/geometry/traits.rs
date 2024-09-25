@@ -1,14 +1,6 @@
-use bytemuck::{Pod, Zeroable};
 use nalgebra::Matrix4;
 
-use crate::graphics::vertex::{TexturedVertex, Vertex};
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
-pub struct Uniforms {
-    pub view_proj: [[f32; 4]; 4],
-    pub model: [[f32; 4]; 4],
-}
+use crate::material::vertex::{TexturedVertex, Vertex, VertexType};
 
 pub enum RenderableObject {
     Shaded {
@@ -44,9 +36,14 @@ impl RenderableObject {
     }
 }
 
-pub trait Renderable<V> {
+pub trait Renderable {
+    type VertexType; // Associated type for vertex type
+
     fn update(&mut self);
+
     fn model_matrix(&self) -> Matrix4<f32>;
-    fn vertices(&self) -> &[V];
+
+    fn vertices(&self) -> &[Self::VertexType]; // Use associated type for vertices
+
     fn indices(&self) -> &[u32];
 }

@@ -341,7 +341,21 @@ impl From<Color> for [f32; 4] {
         [val.r, val.g, val.b, val.a]
     }
 }
-
+impl From<Color> for [f32; 3] {
+    fn from(val: Color) -> Self {
+        [val.r, val.g, val.b]
+    }
+}
+impl From<[f32; 3]> for Color {
+    fn from(val: [f32; 3]) -> Self {
+        Color::new(val[0], val[1], val[2], 1.0)
+    }
+}
+impl From<[u8; 3]> for Color {
+    fn from(val: [u8; 3]) -> Self {
+        Color::new(val[0] as f32, val[1] as f32, val[2] as f32, 1.0)
+    }
+}
 impl From<RgbaColor> for Color {
     fn from(color: RgbaColor) -> Self {
         Color {

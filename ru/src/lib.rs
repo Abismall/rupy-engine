@@ -1,14 +1,18 @@
-pub(crate) mod app;
+pub(crate) mod application;
+pub(crate) mod camera;
 pub(crate) mod config;
 pub(crate) mod error;
 pub(crate) mod geometry;
-pub(crate) mod graphics;
+pub(crate) mod gpu;
 pub(crate) mod input;
+pub(crate) mod material;
 pub(crate) mod math;
 pub(crate) mod menu;
+pub(crate) mod render;
 pub(crate) mod shader;
+pub(crate) mod text;
 pub(crate) mod utilities;
-use app::state;
+use application::state;
 //
 #[cfg(feature = "logging")]
 pub use crate::utilities::logger as rupyLogger;
@@ -48,5 +52,5 @@ macro_rules! log_error {
     ($($arg:tt)*) => {};
 }
 
-pub use app::rupy::Rupy;
+pub use application::Rupy;
 pub use error::AppError;

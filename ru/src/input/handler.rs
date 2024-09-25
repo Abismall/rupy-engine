@@ -1,11 +1,6 @@
-use winit::event::{ElementState, RawKeyEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton, RawKeyEvent};
 
-pub trait InputListener {
-    fn on_key_event(&mut self, event: &RawKeyEvent);
-    fn on_mouse_motion(&mut self, delta: (f64, f64));
-    fn on_mouse_button(&mut self, button: u32, state: ElementState);
-}
-
+use super::InputListener;
 pub struct InputHandler {
     listeners: Vec<Box<dyn InputListener>>,
 }
@@ -21,7 +16,7 @@ impl InputHandler {
         self.listeners.push(listener);
     }
 
-    pub fn handle_input(&mut self, event: &RawKeyEvent) {
+    pub fn handle_input(&mut self, event: &KeyEvent) {
         for listener in self.listeners.iter_mut() {
             listener.on_key_event(event);
         }
@@ -33,9 +28,9 @@ impl InputHandler {
         }
     }
 
-    pub fn handle_mouse_button(&mut self, button: u32, state: ElementState) {
+    pub fn handle_mouse_button(&mut self, button: MouseButton, state: ElementState) {
         for listener in self.listeners.iter_mut() {
-            listener.on_mouse_button(button, state);
+            listener.on_mouse_button(button.into(), state);
         }
     }
 }

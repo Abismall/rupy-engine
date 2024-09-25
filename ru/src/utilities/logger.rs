@@ -22,8 +22,10 @@ impl LogFactory {
         let mut env_logger_builder = env_logger::Builder::new();
         env_logger_builder
             .filter_level(level)
-            .filter_module("wgpu_hal", LevelFilter::Off)
-            .filter_module("wgpu_core", LevelFilter::Off);
+            .filter_module("wgpu_hal", LevelFilter::Error)
+            .filter_module("naga", LevelFilter::Error)
+            .filter_module("wgpu_core", LevelFilter::Error)
+            .filter_module("cosmic_text", LevelFilter::Error);
 
         Self {
             env_logger: env_logger_builder,

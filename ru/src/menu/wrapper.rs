@@ -1,6 +1,7 @@
-use winit::event::{ElementState, RawKeyEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton, RawKeyEvent};
 
-use crate::input::handler::InputListener;
+use crate::input::InputListener;
+use crate::log_debug;
 
 use super::menu::Menu;
 use std::cell::RefCell;
@@ -27,7 +28,7 @@ where
     T: Debug,
     L: Debug,
 {
-    fn on_key_event(&mut self, event: &RawKeyEvent) {
+    fn on_key_event(&mut self, event: &KeyEvent) {
         let mut menu = self.menu.borrow_mut();
         menu.on_key_event(event);
     }
@@ -37,8 +38,12 @@ where
         menu.on_mouse_motion(delta);
     }
 
-    fn on_mouse_button(&mut self, button: u32, state: ElementState) {
+    fn on_mouse_button(&mut self, button: MouseButton, state: ElementState) {
         let mut menu = self.menu.borrow_mut();
         menu.on_mouse_button(button, state);
+    }
+
+    fn on_scroll(&mut self, delta: winit::event::MouseScrollDelta) {
+        log_debug!("Menu mouse button: {:?}", delta);
     }
 }

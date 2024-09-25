@@ -1,6 +1,6 @@
 use nalgebra::Matrix4;
 
-use crate::graphics::vertex::Vertex;
+use crate::material::vertex::Vertex;
 
 pub struct Hexagon {
     pub vertices: Vec<Vertex>,

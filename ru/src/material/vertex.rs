@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub color: [f32; 3],
@@ -68,7 +68,30 @@ impl TexturedVertex {
         }
     }
 }
-pub enum VertexType {
-    Shaded(Vec<Vertex>),
-    Textured(Vec<TexturedVertex>),
+
+pub trait VertexType {
+    fn position(&self) -> [f32; 3];
+    fn color(&self) -> [f32; 3]; // For textured vertices, you can use texture coordinates instead
+}
+
+// Implement VertexType for `Vertex`
+impl VertexType for Vertex {
+    fn position(&self) -> [f32; 3] {
+        self.position
+    }
+
+    fn color(&self) -> [f32; 3] {
+        self.color
+    }
+}
+
+// Implement VertexType for `TexturedVertex`
+impl VertexType for TexturedVertex {
+    fn position(&self) -> [f32; 3] {
+        self.position
+    }
+
+    fn color(&self) -> [f32; 3] {
+        [1.0, 1.0, 1.0] // Placeholder, textured vertices might not use color
+    }
 }

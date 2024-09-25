@@ -1,3 +1,5 @@
+use std::sync::PoisonError;
+
 use thiserror::Error;
 use winit::raw_window_handle::HandleError;
 
@@ -13,4 +15,10 @@ pub enum AppError {
     CreateSurfaceError(#[from] wgpu::CreateSurfaceError),
     #[error("SetLoggerError: {0}")]
     SetLoggerError(#[from] log::SetLoggerError),
+    #[error("RequestAdapterError: {0}")]
+    RequestAdapterError(String),
+    #[error("RequestDeviceError: {0}")]
+    RequestDeviceError(#[from] wgpu::RequestDeviceError),
+    #[error("CommandBufferSubmissionError: {0}")]
+    CommandBufferSubmissionError(String),
 }

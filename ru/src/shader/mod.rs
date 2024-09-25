@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, ShaderModuleDescriptor, ShaderSource};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DataType {
@@ -92,4 +92,19 @@ pub fn shader_data_type_size(data_type: DataType) -> u32 {
             panic!("Unknown ShaderDataType: None is not a valid shader data type!");
         }
     }
+}
+pub fn create_shader_modules(device: &wgpu::Device) -> (wgpu::ShaderModule, wgpu::ShaderModule) {
+    let vertex_shader_source = include_str!("../../static/shader/vertex.wgsl"); // Adjust path if necessary
+    let vertex_shader_module = device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("Vertex Shader"),
+        source: ShaderSource::Wgsl(vertex_shader_source.into()),
+    });
+
+    let fragment_shader_source = include_str!("../../static/shader/fragment.wgsl"); // Adjust path if necessary
+    let fragment_shader_module = device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("Fragment Shader"),
+        source: ShaderSource::Wgsl(fragment_shader_source.into()),
+    });
+
+    (vertex_shader_module, fragment_shader_module)
 }

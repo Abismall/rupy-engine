@@ -1,6 +1,6 @@
 use nalgebra::Matrix4;
 
-use crate::graphics::vertex::Vertex;
+use crate::material::vertex::{Vertex, VertexType};
 
 use super::traits::Renderable;
 
@@ -74,7 +74,7 @@ pub struct ShadedSphere {
 //         }
 //     }
 // }
-impl Renderable<Vertex> for ShadedSphere {
+impl Renderable for ShadedSphere {
     fn update(&mut self) {
         // Transformation or logic to update the object
     }
@@ -83,7 +83,7 @@ impl Renderable<Vertex> for ShadedSphere {
         self.model_matrix
     }
 
-    fn vertices(&self) -> &[Vertex] {
+    fn vertices(&self) -> &[Box<(dyn VertexType + 'static)>] {
         &self.vertices
     }
 
