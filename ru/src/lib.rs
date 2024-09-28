@@ -13,8 +13,7 @@ pub(crate) mod scene;
 pub(crate) mod shader;
 pub(crate) mod text;
 pub(crate) mod utilities;
-use application::state;
-//
+
 #[cfg(feature = "logging")]
 pub use crate::utilities::logger as rupyLogger;
 //
@@ -53,5 +52,5 @@ macro_rules! log_error {
     ($($arg:tt)*) => {};
 }
 
-pub use application::Rupy;
+pub use application::handler::Rupy;
 pub use error::AppError;
