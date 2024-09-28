@@ -8,7 +8,7 @@ pub struct InputHandler {
 }
 
 impl InputHandler {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             listeners: Vec::new(),
         }
