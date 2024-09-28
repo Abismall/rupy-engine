@@ -1,20 +1,34 @@
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::Arc,
+};
+
 use color::Color;
 
-use crate::geometry::Geometry;
-
 pub(crate) mod color;
-pub(crate) mod manager;
+
+pub(crate) mod material_manager;
 pub(crate) mod vertex;
 
 use wgpu::{BindGroup, Buffer};
 
-#[derive(Debug)]
+use crate::geometry::Shape;
+
+pub struct GeometricHasher;
+impl GeometricHasher {
+    pub fn hash(geometry: &Shape) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        geometry.vertex_buffer_data().hash(&mut hasher);
+        geometry.index_buffer_data().hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Material {
-    pub bind_group: BindGroup,
-    pub uniform_buffer: Buffer,
-    pub vertex_buffer: Buffer,
-    pub index_buffer: Buffer,
-    pub geometry: Geometry,
+    pub bind_group: Arc<BindGroup>,
+    pub uniform_buffer: Arc<Buffer>,
+    pub geometry: Shape,
     pub color: Color,
 }
 
@@ -22,18 +36,15 @@ impl Material {
     pub fn new(
         bind_group: BindGroup,
         uniform_buffer: Buffer,
-        vertex_buffer: Buffer,
-        index_buffer: Buffer,
-        geometry: Geometry,
+
+        geometry: Shape,
         color: Color,
     ) -> Self {
         Material {
-            bind_group,
-            uniform_buffer,
-            vertex_buffer,
-            index_buffer,
+            bind_group: bind_group.into(),
             geometry,
             color,
+            uniform_buffer: uniform_buffer.into(),
         }
     }
 

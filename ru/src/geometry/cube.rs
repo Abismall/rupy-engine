@@ -1,225 +1,184 @@
-use nalgebra::Matrix4;
-
+use crate::geometry::Renderable;
 use crate::material::vertex::Vertex;
-
-pub struct Cube {
+use nalgebra::Matrix4;
+#[derive(Debug, Clone)]
+pub struct CubeStructure {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub model_matrix: Matrix4<f32>,
+    pub is_textured: bool,
 }
 
-// impl Cube {
-//     pub fn new(size: f32, position: [f32; 3], color: [f32; 3]) -> Self {
-//         let half = size / 2.0;
-//         let positions = [
-//             // Front face
-//             [-half, -half, half],
-//             [half, -half, half],
-//             [half, half, half],
-//             [-half, half, half],
-//             // Back face
-//             [-half, -half, -half],
-//             [half, -half, -half],
-//             [half, half, -half],
-//             [-half, half, -half],
-//         ];
+impl CubeStructure {
+    pub fn new(size: f32, position: [f32; 3], color: [f32; 3], is_textured: bool) -> Self {
+        let half = size / 2.0;
+        let vertices = vec![
+            Vertex {
+                position: [-half, -half, half],
+                color,
+                normal: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [half, -half, half],
+                color,
+                normal: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [half, half, half],
+                color,
+                normal: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [-half, half, half],
+                color,
+                normal: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [-half, -half, -half],
+                color,
+                normal: [0.0, 0.0, -1.0],
+            },
+            Vertex {
+                position: [half, -half, -half],
+                color,
+                normal: [0.0, 0.0, -1.0],
+            },
+            Vertex {
+                position: [half, half, -half],
+                color,
+                normal: [0.0, 0.0, -1.0],
+            },
+            Vertex {
+                position: [-half, half, -half],
+                color,
+                normal: [0.0, 0.0, -1.0],
+            },
+            Vertex {
+                position: [-half, -half, -half],
+                color,
+                normal: [-1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-half, -half, half],
+                color,
+                normal: [-1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-half, half, half],
+                color,
+                normal: [-1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-half, half, -half],
+                color,
+                normal: [-1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [half, -half, -half],
+                color,
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [half, -half, half],
+                color,
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [half, half, half],
+                color,
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [half, half, -half],
+                color,
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-half, half, -half],
+                color,
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [-half, half, half],
+                color,
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [half, half, half],
+                color,
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [half, half, -half],
+                color,
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [-half, -half, -half],
+                color,
+                normal: [0.0, -1.0, 0.0],
+            },
+            Vertex {
+                position: [-half, -half, half],
+                color,
+                normal: [0.0, -1.0, 0.0],
+            },
+            Vertex {
+                position: [half, -half, half],
+                color,
+                normal: [0.0, -1.0, 0.0],
+            },
+            Vertex {
+                position: [half, -half, -half],
+                color,
+                normal: [0.0, -1.0, 0.0],
+            },
+        ];
 
-//         let normals = [
-//             [0.0, 0.0, 1.0],  // Front
-//             [0.0, 0.0, -1.0], // Back
-//             [-1.0, 0.0, 0.0], // Left
-//             [1.0, 0.0, 0.0],  // Right
-//             [0.0, 1.0, 0.0],  // Top
-//             [0.0, -1.0, 0.0], // Bottom
-//         ];
+        let indices = vec![
+            0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12, 16,
+            17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
+        ];
 
-//         let mut vertices = Vec::new();
-//         let mut indices = Vec::new();
+        let model_matrix = Matrix4::new_translation(&position.into());
 
-//         // Front face
-//         vertices.push(Vertex {
-//             position: positions[0],
-//             color,
-//             normal: normals[0],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[1],
-//             color,
-//             normal: normals[0],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[2],
-//             color,
-//             normal: normals[0],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[3],
-//             color,
-//             normal: normals[0],
-//         });
-//         indices.extend_from_slice(&[0, 1, 2, 2, 3, 0]);
+        Self {
+            vertices,
+            indices,
+            model_matrix,
+            is_textured,
+        }
+    }
+}
 
-//         // Back face
-//         let base_index = vertices.len() as u32;
-//         vertices.push(Vertex {
-//             position: positions[5],
-//             color,
-//             normal: normals[1],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[4],
-//             color,
-//             normal: normals[1],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[7],
-//             color,
-//             normal: normals[1],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[6],
-//             color,
-//             normal: normals[1],
-//         });
-//         indices.extend_from_slice(&[
-//             base_index,
-//             base_index + 1,
-//             base_index + 2,
-//             base_index + 2,
-//             base_index + 3,
-//             base_index,
-//         ]);
+impl Renderable for CubeStructure {
+    type VertexType = Vertex;
 
-//         // Left face
-//         let base_index = vertices.len() as u32;
-//         vertices.push(Vertex {
-//             position: positions[4],
-//             color,
-//             normal: normals[2],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[0],
-//             color,
-//             normal: normals[2],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[3],
-//             color,
-//             normal: normals[2],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[7],
-//             color,
-//             normal: normals[2],
-//         });
-//         indices.extend_from_slice(&[
-//             base_index,
-//             base_index + 1,
-//             base_index + 2,
-//             base_index + 2,
-//             base_index + 3,
-//             base_index,
-//         ]);
+    fn update(&mut self) {}
 
-//         // Right face
-//         let base_index = vertices.len() as u32;
-//         vertices.push(Vertex {
-//             position: positions[1],
-//             color,
-//             normal: normals[3],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[5],
-//             color,
-//             normal: normals[3],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[6],
-//             color,
-//             normal: normals[3],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[2],
-//             color,
-//             normal: normals[3],
-//         });
-//         indices.extend_from_slice(&[
-//             base_index,
-//             base_index + 1,
-//             base_index + 2,
-//             base_index + 2,
-//             base_index + 3,
-//             base_index,
-//         ]);
+    fn model_matrix(&self) -> Matrix4<f32> {
+        self.model_matrix
+    }
 
-//         // Top face
-//         let base_index = vertices.len() as u32;
-//         vertices.push(Vertex {
-//             position: positions[3],
-//             color,
-//             normal: normals[4],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[2],
-//             color,
-//             normal: normals[4],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[6],
-//             color,
-//             normal: normals[4],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[7],
-//             color,
-//             normal: normals[4],
-//         });
-//         indices.extend_from_slice(&[
-//             base_index,
-//             base_index + 1,
-//             base_index + 2,
-//             base_index + 2,
-//             base_index + 3,
-//             base_index,
-//         ]);
+    fn vertices(&self) -> &[Self::VertexType] {
+        &self.vertices
+    }
 
-//         // Bottom face
-//         let base_index = vertices.len() as u32;
-//         vertices.push(Vertex {
-//             position: positions[4],
-//             color,
-//             normal: normals[5],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[5],
-//             color,
-//             normal: normals[5],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[1],
-//             color,
-//             normal: normals[5],
-//         });
-//         vertices.push(Vertex {
-//             position: positions[0],
-//             color,
-//             normal: normals[5],
-//         });
-//         indices.extend_from_slice(&[
-//             base_index,
-//             base_index + 1,
-//             base_index + 2,
-//             base_index + 2,
-//             base_index + 3,
-//             base_index,
-//         ]);
+    fn indices(&self) -> &[u32] {
+        &self.indices
+    }
 
-//         let model_matrix = Matrix4::new_translation(&position);
+    fn is_textured(&self) -> bool {
+        self.is_textured
+    }
 
-//         Self {
-//             vertices,
-//             indices,
-//             model_matrix,
-//         }
-//     }
-// }
+    fn update_texture(&self, _queue: &wgpu::Queue) {
+        if self.is_textured {}
+    }
+}
+
+impl Default for CubeStructure {
+    fn default() -> Self {
+        Self::new(1.0, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], false)
+    }
+}

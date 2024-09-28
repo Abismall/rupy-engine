@@ -28,7 +28,6 @@ impl GPUGlobal {
             false,
         )
         .block_on();
-
         let (device, queue) = adapter_request_device(
             &adapter,
             &GpuConfig::default(),

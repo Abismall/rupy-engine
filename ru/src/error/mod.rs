@@ -1,5 +1,3 @@
-use std::sync::PoisonError;
-
 use thiserror::Error;
 use winit::raw_window_handle::HandleError;
 

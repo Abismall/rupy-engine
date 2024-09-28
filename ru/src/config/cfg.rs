@@ -13,9 +13,12 @@ pub struct GpuConfig {
 
 impl Default for GpuConfig {
     fn default() -> Self {
+        let mut features = wgpu::Features::empty();
+        features.insert(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+        features.insert(wgpu::Features::POLYGON_MODE_LINE);
         Self {
             backends: wgpu::Backends::all(),
-            device_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            device_features: features,
             device_limits: if cfg!(target_arch = "wasm32") {
                 wgpu::Limits::downlevel_webgl2_defaults()
             } else {

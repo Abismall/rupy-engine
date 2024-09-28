@@ -1,7 +1,6 @@
 use winit::event::{ElementState, KeyEvent, MouseButton, RawKeyEvent};
 
 use crate::input::InputListener;
-use crate::log_debug;
 
 use super::menu::Menu;
 use std::cell::RefCell;
@@ -43,7 +42,7 @@ where
         menu.on_mouse_button(button, state);
     }
 
-    fn on_scroll(&mut self, delta: winit::event::MouseScrollDelta) {
-        log_debug!("Menu mouse button: {:?}", delta);
-    }
+    fn on_scroll(&mut self, delta: winit::event::MouseScrollDelta) {}
+
+    fn on_raw_key_event(&mut self, event: &RawKeyEvent) {}
 }

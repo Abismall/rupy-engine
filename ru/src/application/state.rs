@@ -1,39 +1,91 @@
-use crate::camera::Camera;
-use crate::material::manager::MaterialManager;
-use crate::render::pipeline_manager::{setup_pipeline_manager, PipelineManager};
-use crate::render::surface::RenderSurface;
-use crate::text::glyphon_manager::GlyphonManager;
-use crate::utilities::debug::DebugMetrics;
-use crate::{geometry, log_debug, log_error};
-use crate::{gpu::GPUGlobal, material::color::Color};
+use crate::{
+    camera::Camera,
+    geometry,
+    gpu::GPUGlobal,
+    log_debug,
+    material::{color::Color, material_manager::MaterialManager},
+    render::{pass::RenderPhase, pipeline::PipelineManager, RenderSystem},
+    scene::scene_manager::SceneManager,
+    text::glyphon_manager::GlyphonManager,
+    utilities::debug::DebugMetrics,
+};
 
-use std::default;
-use std::sync::{Arc, RwLock};
+use std::{
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
-use wgpu::{CompositeAlphaMode, PresentMode, TextureUsages};
+use wgpu::{CompositeAlphaMode, PresentMode, SurfaceConfiguration, TextureUsages};
 use winit::window::Window;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RenderMode {
+    Normal,      // Regular rendering
+    OutlineOnly, // Only render the outlines
+    Freeze,      // Do not render any new frames
+}
+
+struct Settings {
+    pub fps: bool,
+    pub last_frame_time: bool,
+    pub debug_mode: RenderMode,
+}
+
+impl Settings {
+    pub fn new(fps: bool, last_frame_time: bool, debug_mode: RenderMode) -> Settings {
+        Settings {
+            fps,
+            last_frame_time,
+            debug_mode,
+        }
+    }
+
+    pub fn toggle_fps(&mut self) {
+        self.fps = !self.fps;
+    }
+
+    pub fn toggle_last_frame_time(&mut self) {
+        self.last_frame_time = !self.last_frame_time;
+    }
+
+    pub fn cycle_debug_mode(&mut self) {
+        self.debug_mode = match self.debug_mode {
+            RenderMode::Normal => RenderMode::OutlineOnly,
+            RenderMode::OutlineOnly => RenderMode::Freeze,
+            RenderMode::Freeze => RenderMode::Normal,
+        };
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            fps: false,
+            last_frame_time: false,
+            debug_mode: RenderMode::Normal,
+        }
+    }
+}
 
 pub(crate) struct ApplicationState {
     pub(crate) gpu: GPUGlobal,
-    pub(crate) material_manager: MaterialManager,
+    pub(crate) scene_manager: SceneManager,
     pub(crate) text_rendering_system: GlyphonManager,
-    pub(crate) pipeline_manager: Arc<RwLock<PipelineManager>>,
-    pub(crate) debug: DebugMetrics,
     pub(crate) camera: Camera,
-    pub(crate) render_surface: RenderSurface, // Use the RenderSurface here
+    pub(crate) render_system: RenderSystem,
     pub last_mouse_position: winit::dpi::PhysicalPosition<f64>,
+    pub debug: DebugMetrics,
+    settings: Settings,
+    pub frame_duration: Duration,
 }
 
 impl ApplicationState {
     pub async fn new(window: Arc<Window>, instance_desc: Option<wgpu::InstanceDescriptor>) -> Self {
         let gpu = GPUGlobal::initialize(instance_desc).await.expect("GPU");
-
         let instance_binding = gpu.instance();
         let instance = instance_binding.read().expect("Instance");
-
         let adapter_binding = gpu.adapter();
         let adapter = adapter_binding.read().expect("Adapter");
-
         let device_binding = gpu.device();
         let queue_binding = gpu.queue();
 
@@ -42,8 +94,9 @@ impl ApplicationState {
             .expect("Create surface");
 
         let surface_capabilities = surface.get_capabilities(&adapter);
-
-        let surface_config = wgpu::SurfaceConfiguration {
+        let target_fps = 200.0;
+        let frame_duration = Duration::from_secs_f64(1.0 / target_fps);
+        let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: surface_capabilities.formats[0],
             width: window.inner_size().width,
@@ -53,134 +106,170 @@ impl ApplicationState {
             alpha_mode: CompositeAlphaMode::Auto,
             view_formats: [].to_vec(),
         };
-        let pipeline_manager = Arc::new(RwLock::new(setup_pipeline_manager(
-            &device_binding,
-            surface_capabilities.formats[0],
-        )));
+        let mut pipeline_manager = PipelineManager::new(&device_binding);
+        pipeline_manager.create_main_pipeline(&device_binding, surface_capabilities.formats[0]);
+        pipeline_manager.create_outline_pipeline(&device_binding, surface_capabilities.formats[0]);
+        pipeline_manager.create_surface_pipeline(&device_binding, surface_capabilities.formats[0]);
 
-        // Clone the Arc so both MaterialManager and ApplicationState can use it
-        let mut material_manager = MaterialManager::new(
-            &device_binding,
-            *surface_capabilities
-                .formats
-                .iter()
-                .find(|&&f| {
-                    f == wgpu::TextureFormat::Bgra8UnormSrgb
-                        || f == wgpu::TextureFormat::Rgba8UnormSrgb
-                })
-                .unwrap_or(&surface_capabilities.formats[0]),
-            pipeline_manager.clone(), // Clone the Arc
-            &surface_config,
+        let material_manager = MaterialManager::new(&device_binding, &surface_config);
+
+        let scene_manager =
+            SceneManager::new(material_manager, Arc::new(RwLock::new(pipeline_manager)));
+        let render_system = RenderSystem::new(
+            window.clone(),
+            Arc::clone(&device_binding),
+            surface,
+            surface_config,
         );
-        let render_surface =
-            RenderSurface::new(window.clone(), &device_binding, surface, surface_config);
 
         let text_rendering_system = GlyphonManager::new(
             &device_binding,
             &queue_binding,
-            render_surface.surface_config.format,
+            render_system.target_surface.surface_config.format,
         );
-
-        // Create the pipeline manager
-
-        material_manager.create_material(
-            &device_binding,
-            geometry::Geometry::ShadedTriangle(
-                crate::geometry::triangle::ShadedTriangleStructure::new(
-                    5,
-                    5,
-                    [1.0, 1.0, 1.0].into(),
-                ),
-            ),
-            Color::PINK,
-            "triangle".to_owned(),
-        );
-
-        let debug = DebugMetrics::new();
 
         ApplicationState {
             gpu,
-            material_manager,
+            scene_manager,
             text_rendering_system,
             camera: Camera::default(),
             last_mouse_position: winit::dpi::PhysicalPosition::default(),
-            pipeline_manager, // Use the original Arc here
-            debug,
-            render_surface,
+            render_system,
+            debug: DebugMetrics::new(),
+            settings: Settings::default(),
+            frame_duration,
         }
     }
-    pub fn draw_debug(&mut self) {
-        self.text_rendering_system
-            .draw_frame_time([10.0, 10.0], self.debug.last_frame_time);
-        self.text_rendering_system
-            .draw_fps([10.0, 20.0], self.debug.fps);
+
+    pub fn cycle_debug_mode(&mut self) {
+        self.settings.cycle_debug_mode();
+        self.scene_manager.set_debug_mode(self.settings.debug_mode);
+        log_debug!("Debug mode set to {:?}", self.settings.debug_mode);
     }
-    pub fn render_frame(&mut self) {
-        match self.render_surface.get_current_texture() {
-            Ok(frame) => {
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-                let device_binding = self.gpu.device();
-                let queue_binding = self.gpu.queue();
 
-                let mut encoder =
-                    device_binding.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Render Encoder"),
-                    });
+    pub fn toggle_fps(&mut self) {
+        self.settings.toggle_fps();
+    }
 
-                let proj_matrix = self.camera.view_projection_matrix();
-                log_debug!("Proj matrix: {:?}", proj_matrix);
-                // Lock the pipeline_manager to access the pipeline
-                let pipeline_manager = self.pipeline_manager.read().unwrap();
-                let selected_pipeline = "RenderPipeline"; // In a real scenario, this might be changed dynamically
-                if let Some(pipeline) = pipeline_manager.get_pipeline(selected_pipeline) {
-                    log_debug!("Starting material render");
-                    self.material_manager.render(
-                        &mut encoder,
-                        &view,
-                        "triangle",
-                        proj_matrix,
-                        &queue_binding,
-                        pipeline,
-                    );
-                    log_debug!("Done material render");
-                }
+    pub fn toggle_last_frame_time(&mut self) {
+        self.settings.toggle_last_frame_time();
+    }
 
-                // Rendering text, etc.
-                self.text_rendering_system.render(
-                    &mut encoder,
-                    &device_binding,
-                    &queue_binding,
-                    &view,
-                    &self.material_manager.depth_texture_view,
-                    &self.render_surface.surface_config,
-                );
+    pub fn set_debug_mode_for_all(&mut self, enabled: RenderMode) {
+        self.scene_manager.set_debug_mode_for_all(enabled);
+    }
 
-                queue_binding.submit(Some(encoder.finish()));
-                frame.present();
-                self.text_rendering_system.clear_buffer();
-                let result = wgpu::Device::poll(&device_binding, wgpu::MaintainBase::Poll);
-                log_debug!("Result: {:?}", result.is_queue_empty());
-            }
-            Err(e) => {
-                log_error!("Failed to get frame texture: {:?}", e);
-            }
+    fn fps(&mut self) {
+        if self.settings.fps {
+            self.text_rendering_system
+                .draw_fps([10.0, 10.0], self.debug.fps);
         }
     }
+
+    fn last_frame_time(&mut self) {
+        if self.settings.last_frame_time {
+            self.text_rendering_system
+                .draw_frame_time([10.0, 20.0], self.debug.last_frame_time);
+        }
+    }
+    pub fn add_test_objects(&mut self) {
+        let geometry_cube = geometry::Shape::Cube(geometry::cube::CubeStructure::default());
+        let geometry_sphere =
+            geometry::Shape::Triangle(geometry::triangle::TriangleStructure::default());
+
+        let position_cube = nalgebra::Vector3::new(3.0, 0.0, -5.0);
+        let position_sphere = nalgebra::Vector3::new(0.0, 0.0, -5.0);
+
+        let color_cube = Color::new(1.0, 0.0, 0.0, 1.0);
+        let color_sphere = Color::new(0.0, 1.0, 0.0, 1.0);
+
+        self.add_scene_object(geometry_cube, position_cube, color_cube);
+        self.add_scene_object(geometry_sphere, position_sphere, color_sphere);
+    }
+
+    pub fn add_scene_object(
+        &mut self,
+        geometry: geometry::Shape,
+        position: nalgebra::Vector3<f32>,
+        color: Color,
+    ) {
+        let device_binding = self.gpu.device();
+        self.scene_manager
+            .add_object(position, geometry, color, None, &device_binding);
+    }
+
     pub fn resize(&mut self, new_width: u32, new_height: u32) {
         let device_binding = self.gpu.device();
-        self.render_surface
+        self.render_system
+            .target_surface
             .resize(new_width, new_height, &device_binding);
+        self.scene_manager.materials.resize_depth_texture(
+            &device_binding,
+            &self.render_system.target_surface.surface_config,
+        );
+
+        self.camera
+            .set_aspect_ratio(new_width as f32 / new_height as f32);
     }
 
-    pub fn change_material_color(&mut self, material_name: &str, new_color: Color) {
-        let queue_binding = self.gpu.queue();
-        self.material_manager.set_material_color(
-            material_name,
-            Color::from(new_color),
-            &queue_binding,
-            self.camera.projection_matrix().into(),
-        );
+    pub fn render_frame(&mut self) {
+        if self
+            .render_system
+            .target_surface
+            .acquire_current_texture()
+            .is_err()
+        {
+            return;
+        }
+
+        self.fps();
+        self.last_frame_time();
+
+        if let Some(surface_texture) = &self.render_system.target_surface.current_texture {
+            let color_view = surface_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            let device_binding = self.gpu.device();
+            let queue_binding = self.gpu.queue();
+
+            let mut encoder =
+                device_binding.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
+
+            let proj_matrix = self.camera.view_projection_matrix();
+
+            self.render_system.command_buffer.commands.clear();
+
+            self.scene_manager.populate_command_buffer(
+                &mut self.render_system.command_buffer,
+                &proj_matrix,
+                Arc::new(&queue_binding),
+                Arc::new(&device_binding),
+            );
+
+            let depth_attachment = Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.render_system.target_surface.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            });
+
+            RenderPhase::execute(
+                &self.render_system.command_buffer.commands,
+                &mut encoder,
+                &color_view,
+                depth_attachment.as_ref(),
+                wgpu::Color::WHITE,
+            );
+
+            queue_binding.submit(Some(encoder.finish()));
+
+            self.render_system.target_surface.present_texture();
+            self.render_system.target_surface.window.request_redraw();
+        }
     }
 }

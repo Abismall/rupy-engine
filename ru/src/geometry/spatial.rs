@@ -211,7 +211,6 @@ impl Width {
     }
 }
 
-// Implement Add trait for Width
 impl Add for Width {
     type Output = Self;
 
@@ -220,7 +219,6 @@ impl Add for Width {
     }
 }
 
-// Implement Sub trait for Width
 impl Sub for Width {
     type Output = Self;
 
@@ -229,7 +227,6 @@ impl Sub for Width {
     }
 }
 
-// Implement Mul trait for Width
 impl Mul for Width {
     type Output = Self;
 
@@ -238,7 +235,6 @@ impl Mul for Width {
     }
 }
 
-// Implement Div trait for Width
 impl Div for Width {
     type Output = Self;
 
@@ -247,7 +243,6 @@ impl Div for Width {
     }
 }
 
-// Implement Rem trait for Width
 impl Rem for Width {
     type Output = Self;
 
@@ -266,7 +261,6 @@ impl Height {
     }
 }
 
-// Implement Add trait for Height
 impl Add for Height {
     type Output = Self;
 
@@ -275,7 +269,6 @@ impl Add for Height {
     }
 }
 
-// Implement Sub trait for Height
 impl Sub for Height {
     type Output = Self;
 
@@ -284,7 +277,6 @@ impl Sub for Height {
     }
 }
 
-// Implement Mul trait for Height
 impl Mul for Height {
     type Output = Self;
 
@@ -293,7 +285,6 @@ impl Mul for Height {
     }
 }
 
-// Implement Div trait for Height
 impl Div for Height {
     type Output = Self;
 
@@ -302,7 +293,6 @@ impl Div for Height {
     }
 }
 
-// Implement Rem trait for Height
 impl Rem for Height {
     type Output = Self;
 
@@ -321,7 +311,6 @@ impl Depth {
     }
 }
 
-// Implement Add trait for Depth
 impl Add for Depth {
     type Output = Self;
 
@@ -330,7 +319,6 @@ impl Add for Depth {
     }
 }
 
-// Implement Sub trait for Depth
 impl Sub for Depth {
     type Output = Self;
 
@@ -339,7 +327,6 @@ impl Sub for Depth {
     }
 }
 
-// Implement Mul trait for Depth
 impl Mul for Depth {
     type Output = Self;
 
@@ -348,7 +335,6 @@ impl Mul for Depth {
     }
 }
 
-// Implement Div trait for Depth
 impl Div for Depth {
     type Output = Self;
 
@@ -357,7 +343,6 @@ impl Div for Depth {
     }
 }
 
-// Implement Rem trait for Depth
 impl Rem for Depth {
     type Output = Self;
 

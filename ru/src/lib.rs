@@ -9,6 +9,7 @@ pub(crate) mod material;
 pub(crate) mod math;
 pub(crate) mod menu;
 pub(crate) mod render;
+pub(crate) mod scene;
 pub(crate) mod shader;
 pub(crate) mod text;
 pub(crate) mod utilities;
