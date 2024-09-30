@@ -1,211 +1,105 @@
-use crate::{
-    geometry::{self},
-    input::{handler::InputHandler, InputListener},
-    log_debug,
-    material::color::Color,
-    rupyLogger::LogFactory,
-    utilities::TITLE,
+use crate::{gpu::GPUGlobal, log_debug, log_error, render::surface::TargetSurface, Rupy};
+use std::{borrow::BorrowMut, sync::Arc};
+use wgpu::InstanceDescriptor;
+use winit::{
+    event::{DeviceEvent, WindowEvent},
+    event_loop::ActiveEventLoop,
 };
-use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use super::state::{ApplicationState, RenderMode};
-use winit::{dpi::PhysicalPosition, event::WindowEvent, keyboard::KeyCode, window::Window};
-
-pub struct Rupy {
-    state: Option<ApplicationState>,
-    #[cfg(feature = "logging")]
-    pub logger: Option<LogFactory>,
-    pub(crate) input: InputHandler,
-}
-
-impl Rupy {
-    pub const TITLE: &str = TITLE;
-
-    pub fn new() -> Self {
-        let input = InputHandler::new();
-
-        Rupy {
-            #[cfg(feature = "logging")]
-            logger: Some(Default::default()),
-            input,
-            state: None,
-        }
-    }
-
-    pub fn initialize_state(
-        &mut self,
-        window: Arc<Window>,
-        instance_desc: Option<wgpu::InstanceDescriptor>,
-    ) {
-        self.state = Some(pollster::block_on(ApplicationState::new(
-            window,
-            instance_desc,
-        )));
-    }
-
-    pub fn add_object_to_scene(
-        &mut self,
-        geometry: geometry::Shape,
-        position: nalgebra::Vector3<f32>,
-        color: Color,
-    ) {
-        if let Some(state) = &mut self.state {
-            log_debug!(
-                "Adding object with ID: {:?}, position: {:?}",
-                geometry,
-                position
-            );
-            state.add_scene_object(geometry, position, color);
-        }
-    }
-
-    pub fn toggle_debug_mode(&mut self) {
-        if let Some(state) = &mut self.state {
-            state.cycle_debug_mode();
-            state.add_test_objects();
-        }
-    }
-    pub fn set_debug_mode_for_all(&mut self, enabled: RenderMode) {
-        if let Some(state) = &mut self.state {
-            state.set_debug_mode_for_all(enabled);
-        }
-    }
-}
+use super::{
+    event::{EventHandler, EventProcessor},
+    state::ApplicationState,
+};
 
 impl winit::application::ApplicationHandler for Rupy {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        if self.state.is_some() {
-            return;
-        } else {
-            self.state = Some(pollster::block_on(ApplicationState::new(
-                Arc::new(
-                    event_loop
-                        .create_window(Window::default_attributes())
-                        .unwrap(),
-                ),
-                None,
-            )));
-            self.toggle_debug_mode();
-        }
+    fn resumed(&mut self, el: &winit::event_loop::ActiveEventLoop) {
+        self.state
+            .is_none()
+            .then(|| self.state = Some(rehydrate(el)));
     }
     fn new_events(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
+        el: &winit::event_loop::ActiveEventLoop,
         cause: winit::event::StartCause,
     ) {
-        match cause {
-            winit::event::StartCause::ResumeTimeReached { .. } | winit::event::StartCause::Init => {
-                // It's time to render a new frame
-                if let Some(ref mut state) = self.state {
-                    state.debug.update();
-                    state.camera.update(state.debug.delta_time as f32);
-                    state.render_system.target_surface.window.request_redraw();
-                }
-            }
-            _ => {}
-        }
     }
 
-    fn user_event(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, event: ()) {
-        let _ = (event_loop, event);
-    }
-
-    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        if let Some(ref mut state) = self.state {
-            let next_frame_time = state.debug.last_frame_time + state.frame_duration;
-            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_frame_time));
-        }
-    }
-
-    fn suspended(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let _ = event_loop;
-    }
-
-    fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let _ = event_loop;
-    }
-
-    fn memory_warning(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let _ = event_loop;
-    }
     fn window_event(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
+        el: &winit::event_loop::ActiveEventLoop,
+        id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        if let Some(ref mut state) = self.state {
-            match event {
-                WindowEvent::Resized(size) => {
-                    state.resize(size.width, size.height);
-                }
-                WindowEvent::RedrawRequested => {
-                    state.render_frame();
-                }
-                WindowEvent::CloseRequested => {
-                    // Log close request
-                    event_loop.exit();
-                }
-
-                WindowEvent::KeyboardInput {
-                    device_id,
-                    event,
-                    is_synthetic,
-                } => {
-                    match event.physical_key {
-                        winit::keyboard::PhysicalKey::Code(key_code) => match key_code {
-                            KeyCode::ControlLeft => {
-                                state.camera.look_at_object([3.0, 0.0, -5.0].into())
-                            }
-                            _ => (),
-                        },
-                        _ => (),
-                    }
-                    state.camera.on_key_event(&event);
-                }
-                WindowEvent::CursorMoved {
-                    device_id,
-                    position,
-                } => {
-                    let delta_x = position.x - state.last_mouse_position.x;
-                    let delta_y = position.y - state.last_mouse_position.y;
-                    state.camera.on_mouse_motion((delta_x, delta_y));
-                    state.last_mouse_position = PhysicalPosition::new(delta_x, delta_y);
-                }
-
-                WindowEvent::MouseWheel {
-                    device_id,
-                    delta,
-                    phase,
-                } => {
-                    state.camera.on_scroll(delta);
-                }
-                _ => (),
+        let state = match self.state.borrow_mut() {
+            Some(app_mut) => app_mut,
+            None => {
+                log_debug!("Failed to borrow state as mutable: {:?}", event);
+                return;
             }
-        }
+        };
     }
+
     fn device_event(
         &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
+        el: &winit::event_loop::ActiveEventLoop,
         _device_id: winit::event::DeviceId,
         event: winit::event::DeviceEvent,
     ) {
-        // Ensure that we have a valid application state and access to the camera
-        if let Some(ref mut state) = self.state {
-            // Match on the type of device event and pass it directly to the camera
-            match event {
-                winit::event::DeviceEvent::Key(raw_key_event) => {
-                    // If a raw key event is received, handle it by sending to the camera
-                    match raw_key_event.physical_key {
-                        winit::keyboard::PhysicalKey::Code(key_code) => match key_code {
-                            KeyCode::KeyQ => self.toggle_debug_mode(),
-                            _ => (),
-                        },
-                        _ => (),
-                    }
-                }
-                _ => (), // Ignore unsupported events
-            }
+        <EventHandler as EventProcessor>::process::<DeviceEvent>(
+            winit::event::Event::UserEvent(event),
+            el,
+        );
+    }
+}
+
+fn rehydrate(el: &ActiveEventLoop) -> ApplicationState {
+    let window = Arc::new(
+        el.create_window(crate::utilities::default_window_attributes(None, None))
+            .expect("Create window failed on resume"),
+    );
+
+    let gpu_res = pollster::block_on(GPUGlobal::initialize(Some(InstanceDescriptor::default())));
+    let gpu = match gpu_res {
+        Ok(initialized) => initialized,
+        Err(e) => {
+            log_error!("{:?}", e);
+            panic!("{}", format!("{:?}", e));
+        }
+    };
+
+    let instance = gpu.instance();
+
+    let instance = instance.read().expect("Failed to lock the instance");
+
+    let surface = instance
+        .create_surface(window.clone())
+        .expect("Failed to create surface");
+
+    let device = gpu.device().clone();
+    let adapter = gpu.adapter();
+
+    let adapter = adapter.read().expect("Failed to lock the adapter");
+
+    let surface_format = surface.get_capabilities(&adapter).formats[0];
+    let surface_config = wgpu::SurfaceConfiguration {
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        format: surface_format,
+        width: window.inner_size().width,
+        height: window.inner_size().height,
+        present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+    };
+
+    match pollster::block_on(ApplicationState::build(
+        TargetSurface::new(window, device, surface_config, surface),
+        Some(InstanceDescriptor::default()),
+    )) {
+        Ok(rehydrated) => rehydrated,
+        Err(e) => {
+            log_error!("Failed to initialize application state: {:?}", e);
+            panic!("{}", format!("{:?}", e));
         }
     }
 }

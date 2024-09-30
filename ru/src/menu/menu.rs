@@ -4,7 +4,7 @@ use winit::{
     keyboard::KeyCode,
 };
 
-use crate::{input::InputListener, log_debug};
+use crate::log_debug;
 
 use super::item::MenuItem;
 
@@ -74,38 +74,4 @@ where
         }
         None
     }
-}
-
-impl<T, L> InputListener for Menu<T, L>
-where
-    T: Debug,
-    L: Debug,
-{
-    fn on_key_event(&mut self, event: &KeyEvent) {
-        match event.physical_key {
-            winit::keyboard::PhysicalKey::Code(key_code) => match key_code {
-                winit::keyboard::KeyCode::ArrowUp => {
-                    if self.selected > 0 {
-                        self.selected -= 1;
-                    }
-                }
-                winit::keyboard::KeyCode::ArrowDown => {
-                    if self.selected < self.items.len() - 1 {
-                        self.selected += 1;
-                    }
-                }
-                winit::keyboard::KeyCode::Enter => {}
-                _ => {}
-            },
-            winit::keyboard::PhysicalKey::Unidentified(native_key_code) => {}
-        }
-    }
-
-    fn on_mouse_motion(&mut self, delta: (f64, f64)) {}
-
-    fn on_mouse_button(&mut self, button: MouseButton, state: ElementState) {}
-
-    fn on_scroll(&mut self, delta: winit::event::MouseScrollDelta) {}
-
-    fn on_raw_key_event(&mut self, event: &RawKeyEvent) {}
 }

@@ -1,83 +1,72 @@
-use winit::event::{
-    DeviceEvent, ElementState, KeyEvent, MouseButton, MouseScrollDelta, RawKeyEvent,
-};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, RawKeyEvent};
 
-use super::InputListener;
+use super::traits::*;
 pub struct InputHandler {
-    listeners: Vec<Box<dyn InputListener>>,
+    key_listeners: Vec<Box<dyn KeyListener>>,
+    raw_key_listeners: Vec<Box<dyn RawKeyListener>>,
+    mouse_motion_listeners: Vec<Box<dyn MouseMotionListener>>,
+    mouse_button_listeners: Vec<Box<dyn MouseButtonListener>>,
+    scroll_listeners: Vec<Box<dyn ScrollListener>>,
 }
 
 impl InputHandler {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            listeners: Vec::new(),
+            key_listeners: Vec::new(),
+            raw_key_listeners: Vec::new(),
+            mouse_motion_listeners: Vec::new(),
+            mouse_button_listeners: Vec::new(),
+            scroll_listeners: Vec::new(),
         }
     }
 
-    fn add_listener(&mut self, listener: Box<dyn InputListener>) {
-        self.listeners.push(listener);
+    pub fn add_key_listener(&mut self, listener: Box<dyn KeyListener>) {
+        self.key_listeners.push(listener);
     }
 
-    fn handle_input(&mut self, event: &KeyEvent) {
-        for listener in self.listeners.iter_mut() {
+    pub fn add_raw_key_listener(&mut self, listener: Box<dyn RawKeyListener>) {
+        self.raw_key_listeners.push(listener);
+    }
+
+    pub fn add_mouse_motion_listener(&mut self, listener: Box<dyn MouseMotionListener>) {
+        self.mouse_motion_listeners.push(listener);
+    }
+
+    pub fn add_mouse_button_listener(&mut self, listener: Box<dyn MouseButtonListener>) {
+        self.mouse_button_listeners.push(listener);
+    }
+
+    pub fn add_scroll_listener(&mut self, listener: Box<dyn ScrollListener>) {
+        self.scroll_listeners.push(listener);
+    }
+
+    pub fn handle_key_event(&mut self, event: &KeyEvent) {
+        for listener in &mut self.key_listeners {
             listener.on_key_event(event);
         }
     }
 
-    fn handle_raw_input(&mut self, event: &RawKeyEvent) {
-        for listener in self.listeners.iter_mut() {
+    pub fn handle_raw_key_event(&mut self, event: &RawKeyEvent) {
+        for listener in &mut self.raw_key_listeners {
             listener.on_raw_key_event(event);
         }
     }
 
-    fn handle_mouse_motion(&mut self, delta: (f64, f64)) {
-        for listener in self.listeners.iter_mut() {
+    pub fn handle_mouse_motion(&mut self, delta: (f64, f64)) {
+        for listener in &mut self.mouse_motion_listeners {
             listener.on_mouse_motion(delta);
         }
     }
 
-    fn handle_mouse_button(&mut self, button: MouseButton, state: ElementState) {
-        for listener in self.listeners.iter_mut() {
-            listener.on_mouse_button(button.into(), state);
+    pub fn handle_mouse_button(&mut self, button: MouseButton, state: ElementState) {
+        for listener in &mut self.mouse_button_listeners {
+            listener.on_mouse_button(button, state);
         }
     }
 
-    fn handle_mouse_scroll(&mut self, delta: MouseScrollDelta) {
-        for listener in self.listeners.iter_mut() {
+    pub fn handle_scroll(&mut self, delta: MouseScrollDelta) {
+        for listener in &mut self.scroll_listeners {
             listener.on_scroll(delta);
         }
-    }
-
-    /// Method to process a generic DeviceEvent, now includes scroll handling
-    fn process_event(&mut self, event: &DeviceEvent) {
-        match event {
-            DeviceEvent::Key(key_event) => {
-                self.handle_raw_input(key_event);
-            }
-            DeviceEvent::MouseMotion { delta: mouse_delta } => {
-                self.handle_mouse_motion(*mouse_delta);
-            }
-            DeviceEvent::Button { button, state } => {
-                if let Some(mouse_button) = map_button_to_mouse(*button) {
-                    self.handle_mouse_button(mouse_button, *state);
-                }
-            }
-            DeviceEvent::MouseWheel {
-                delta: scroll_delta,
-            } => {
-                self.handle_mouse_scroll(*scroll_delta);
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Helper function to map a raw button code to a MouseButton
-fn map_button_to_mouse(button: u32) -> Option<MouseButton> {
-    match button {
-        1 => Some(MouseButton::Left),
-        2 => Some(MouseButton::Right),
-        3 => Some(MouseButton::Middle),
-        _ => None,
     }
 }

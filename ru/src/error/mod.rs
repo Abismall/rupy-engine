@@ -1,4 +1,7 @@
+use std::path::Path;
+
 use thiserror::Error;
+
 use winit::raw_window_handle::HandleError;
 
 #[derive(Debug, Error)]
@@ -19,4 +22,8 @@ pub enum AppError {
     RequestDeviceError(#[from] wgpu::RequestDeviceError),
     #[error("CommandBufferSubmissionError: {0}")]
     CommandBufferSubmissionError(String),
+    #[error("FileNotFoundError: {0}")]
+    FileNotFoundError(String),
+    #[error("ImageError: {0}")]
+    ImageError(#[from] image::ImageError),
 }

@@ -1,5 +1,5 @@
 use crate::{
-    config::cfg::GpuConfig,
+    config::gpu::GpuConfig,
     utilities::{adapter_request_device, instance_request_adapter},
     AppError,
 };

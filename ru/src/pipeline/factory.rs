@@ -1,92 +1,106 @@
-use std::{collections::HashMap, sync::Arc};
 use wgpu::{
-    BindGroupLayout, BindGroupLayoutEntry, Device, PipelineLayoutDescriptor, RenderPipeline,
-    ShaderModule, TextureFormat,
+    BindGroup, BindGroupDescriptor, BindGroupLayout, BindGroupLayoutDescriptor, Device,
+    PipelineLayoutDescriptor, RenderPipeline, ShaderModule, ShaderStages, TextureFormat,
 };
 
-use crate::material::vertex::Vertex;
+use crate::{object::vertex::Vertex, render::layout::BindGroupLayoutEntryEnum};
 
-pub const DEFAULT_PIPELINE: &str = "RenderPipeline";
-pub const OUTLINE_PIPELINE: &str = "OutlinePipeline";
-pub const SURFACE_PIPELINE: &str = "SurfacePipeline";
+pub struct PipelineFactory;
 
-pub struct PipelineManager {
-    pub pipelines: HashMap<String, Arc<wgpu::RenderPipeline>>,
-    pub bind_group_layout: BindGroupLayout,
-}
-
-impl PipelineManager {
-    pub fn new(device: &Device) -> Self {
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Uniform Bind Group Layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+impl PipelineFactory {
+    pub fn create_bind_group_layout_entries(
+        entries: &Vec<BindGroupLayoutEntryEnum>,
+    ) -> Vec<wgpu::BindGroupLayoutEntry> {
+        let mut layout_entries = Vec::new();
+        for (index, resource) in entries.iter().enumerate() {
+            let layout_entry = match resource {
+                BindGroupLayoutEntryEnum::UniformBuffer(_) => wgpu::BindGroupLayoutEntry {
+                    binding: index as u32,
+                    visibility: ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
-        });
+                BindGroupLayoutEntryEnum::Texture(_) => wgpu::BindGroupLayoutEntry {
+                    binding: index as u32,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntryEnum::Sampler(_) => wgpu::BindGroupLayoutEntry {
+                    binding: index as u32,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            };
 
-        Self {
-            pipelines: HashMap::new(),
-            bind_group_layout,
+            layout_entries.push(layout_entry);
         }
+        layout_entries
     }
 
-    pub fn create_main_pipeline(&mut self, device: &Device, swapchain_format: TextureFormat) {
-        let pipeline = self.create_pipeline_with_depth(
-            device,
-            &self.bind_group_layout,
-            swapchain_format,
-            include_str!("../../static/shader/vertex.wgsl"),
-            include_str!("../../static/shader/fragment.wgsl"),
-            DEFAULT_PIPELINE,
-        );
-        self.pipelines
-            .insert(DEFAULT_PIPELINE.to_string(), Arc::new(pipeline));
+    pub fn create_bind_group_entries(
+        entries: &Vec<BindGroupLayoutEntryEnum>,
+    ) -> Vec<wgpu::BindGroupEntry> {
+        let mut bind_group_entries = Vec::new();
+
+        for (index, resource) in entries.iter().enumerate() {
+            let bind_group_entry = match resource {
+                BindGroupLayoutEntryEnum::UniformBuffer(buffer) => wgpu::BindGroupEntry {
+                    binding: index as u32,
+                    resource: buffer.as_entire_binding(),
+                },
+                BindGroupLayoutEntryEnum::Texture(texture_view) => wgpu::BindGroupEntry {
+                    binding: index as u32,
+                    resource: wgpu::BindingResource::TextureView(texture_view),
+                },
+                BindGroupLayoutEntryEnum::Sampler(sampler) => wgpu::BindGroupEntry {
+                    binding: index as u32,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+            };
+
+            bind_group_entries.push(bind_group_entry);
+        }
+        bind_group_entries
     }
 
-    pub fn create_outline_pipeline(&mut self, device: &Device, swapchain_format: TextureFormat) {
-        let pipeline = self.create_pipeline_with_depth(
-            device,
-            &self.bind_group_layout,
-            swapchain_format,
-            include_str!("../../static/shader/outline.vertex.wgsl"),
-            include_str!("../../static/shader/outline.fragment.wgsl"),
-            OUTLINE_PIPELINE,
-        );
-        self.pipelines
-            .insert(OUTLINE_PIPELINE.to_string(), Arc::new(pipeline));
-    }
-
-    pub fn create_surface_pipeline(&mut self, device: &Device, swapchain_format: TextureFormat) {
-        let pipeline = self.create_pipeline_without_depth(
-            device,
-            &self.bind_group_layout,
-            swapchain_format,
-            include_str!("../../static/shader/transparent.vertex.wgsl"),
-            include_str!("../../static/shader/transparent.fragment.wgsl"),
-            SURFACE_PIPELINE,
-        );
-        self.pipelines
-            .insert(SURFACE_PIPELINE.to_string(), Arc::new(pipeline));
-    }
-
-    pub fn get_pipeline(&self, name: &str) -> Option<Arc<wgpu::RenderPipeline>> {
-        self.pipelines.get(name).cloned()
-    }
-
-    fn create_pipeline_with_depth(
-        &self,
+    pub fn create_bind_group(
         device: &Device,
-        bind_group_layout: &BindGroupLayout,
+        entries: &Vec<BindGroupLayoutEntryEnum>,
+    ) -> BindGroup {
+        device.create_bind_group(&BindGroupDescriptor {
+            layout: &device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                entries: &&Self::create_bind_group_layout_entries(entries),
+                label: Some("Dynamic Bind Group Layout"),
+            }),
+            entries: &Self::create_bind_group_entries(entries),
+            label: Some("Dynamic Bind Group"),
+        })
+    }
+    pub fn create_bind_group_layout(
+        device: &Device,
+        entries: &Vec<BindGroupLayoutEntryEnum>,
+    ) -> BindGroupLayout {
+        device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            entries: &Self::create_bind_group_layout_entries(entries),
+            label: Some("Dynamic Bind Group Layout"),
+        })
+    }
+    pub fn create_pipeline_with_depth(
+        device: &Device,
         texture_format: TextureFormat,
         vertex_shader_src: &str,
         fragment_shader_src: &str,
+        bind_group_layout: &BindGroupLayout,
         label: &str,
     ) -> RenderPipeline {
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -99,7 +113,7 @@ impl PipelineManager {
             source: wgpu::ShaderSource::Wgsl(fragment_shader_src.into()),
         });
 
-        self.create_pipeline(
+        Self::create_pipeline(
             device,
             bind_group_layout,
             texture_format,
@@ -117,13 +131,12 @@ impl PipelineManager {
         )
     }
 
-    fn create_pipeline_without_depth(
-        &self,
+    pub fn create_pipeline_without_depth(
         device: &Device,
-        bind_group_layout: &BindGroupLayout,
         texture_format: TextureFormat,
         vertex_shader_src: &str,
         fragment_shader_src: &str,
+        bind_group_layout: &BindGroupLayout,
         label: &str,
     ) -> RenderPipeline {
         let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -136,7 +149,7 @@ impl PipelineManager {
             source: wgpu::ShaderSource::Wgsl(fragment_shader_src.into()),
         });
 
-        self.create_pipeline(
+        Self::create_pipeline(
             device,
             bind_group_layout,
             texture_format,
@@ -148,8 +161,7 @@ impl PipelineManager {
         )
     }
 
-    fn create_pipeline(
-        &self,
+    pub fn create_pipeline(
         device: &Device,
         bind_group_layout: &BindGroupLayout,
         texture_format: TextureFormat,
@@ -204,18 +216,4 @@ impl PipelineManager {
             cache: Default::default(),
         })
     }
-}
-pub fn create_bind_group(
-    device: &wgpu::Device,
-    bind_group_layout: &wgpu::BindGroupLayout,
-    uniform_buffer: &wgpu::Buffer,
-) -> wgpu::BindGroup {
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        layout: bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: uniform_buffer.as_entire_binding(),
-        }],
-        label: Some("Uniform Bind Group"),
-    })
 }

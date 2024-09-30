@@ -1,12 +1,13 @@
-use super::command::RenderCommand;
 use wgpu::{
     CommandEncoder, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, TextureView,
 };
 
-pub struct RenderPhase;
+use super::command::RenderCommand;
 
-impl RenderPhase {
+pub struct RenderPass;
+
+impl RenderPass {
     pub fn execute(
         command_buffer: &Vec<RenderCommand>,
         encoder: &mut CommandEncoder,
@@ -34,7 +35,7 @@ impl RenderPhase {
         for command in command_buffer {
             render_pass.set_pipeline(&command.pipeline);
 
-            render_pass.set_bind_group(0, &command.uniform_data, &[]);
+            render_pass.set_bind_group(0, &command.bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, command.vertex_buffer.slice(..));
             render_pass.set_index_buffer(command.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
