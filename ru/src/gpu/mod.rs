@@ -9,8 +9,8 @@ use std::sync::{Arc, RwLock};
 use wgpu::{self};
 
 pub struct GPUGlobal {
-    _device: Arc<wgpu::Device>,
-    _queue: Arc<wgpu::Queue>,
+    _device: Arc<RwLock<wgpu::Device>>,
+    _queue: Arc<RwLock<wgpu::Queue>>,
     _instance: Arc<RwLock<wgpu::Instance>>,
     _adapter: Arc<RwLock<wgpu::Adapter>>,
 }
@@ -36,18 +36,18 @@ impl GPUGlobal {
         .block_on();
 
         Ok(GPUGlobal {
-            _device: Arc::new(device),
-            _queue: Arc::new(queue),
+            _device: Arc::new(device.into()),
+            _queue: Arc::new(queue.into()),
             _instance: Arc::new(RwLock::new(instance)),
             _adapter: Arc::new(RwLock::new(adapter)),
         })
     }
 
-    pub fn device(&self) -> Arc<wgpu::Device> {
+    pub fn device(&self) -> Arc<RwLock<wgpu::Device>> {
         Arc::clone(&self._device)
     }
 
-    pub fn queue(&self) -> Arc<wgpu::Queue> {
+    pub fn queue(&self) -> Arc<RwLock<wgpu::Queue>> {
         Arc::clone(&self._queue)
     }
 

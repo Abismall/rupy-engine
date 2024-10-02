@@ -1,6 +1,6 @@
-use crate::object::vertex::Vertex;
+use super::Vertex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Shape {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

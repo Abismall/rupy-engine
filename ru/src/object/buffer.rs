@@ -1,44 +1,51 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use wgpu::Buffer;
 
-use crate::log_debug;
-#[derive(Debug)]
+use wgpu::util::DeviceExt;
+
+use super::Mesh;
+
+use crate::math::Mat4;
+
 pub struct BufferManager {
-    buffers: HashMap<u64, Arc<Buffer>>,
+    vertex_buffers: HashMap<u64, wgpu::Buffer>,
+    index_buffers: HashMap<u64, wgpu::Buffer>,
 }
 
 impl BufferManager {
     pub fn new() -> Self {
-        let instance = BufferManager {
-            buffers: HashMap::new(),
-        };
-        log_debug!("{:?}", instance);
-        instance
-    }
-
-    pub fn create_or_get_buffer(
-        &mut self,
-        key: u64,
-        device: &wgpu::Device,
-        buffer_size: wgpu::BufferAddress,
-    ) -> Arc<Buffer> {
-        if let Some(buffer) = self.buffers.get(&key) {
-            return Arc::clone(buffer);
+        Self {
+            vertex_buffers: HashMap::new(),
+            index_buffers: HashMap::new(),
         }
-
-        let buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform Buffer"),
-            size: buffer_size,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }));
-
-        self.buffers.insert(key, Arc::clone(&buffer));
-        buffer
     }
 
-    pub fn get_buffer(&self, key: u64) -> Option<Arc<Buffer>> {
-        self.buffers.get(&key).cloned()
+    pub fn get_or_create_vertex_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        mesh: &Mesh,
+        key: u64,
+    ) -> &wgpu::Buffer {
+        self.vertex_buffers.entry(key).or_insert_with(|| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&mesh.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+        })
+    }
+
+    pub fn get_or_create_index_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        mesh: &Mesh,
+        key: u64,
+    ) -> &wgpu::Buffer {
+        self.index_buffers.entry(key).or_insert_with(|| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&mesh.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            })
+        })
     }
 }

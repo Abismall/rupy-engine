@@ -1,44 +1,122 @@
-use crate::{gpu::GPUGlobal, log_debug, log_error, render::surface::TargetSurface, Rupy};
-use std::{borrow::BorrowMut, sync::Arc};
-use wgpu::InstanceDescriptor;
-use winit::{
-    event::{DeviceEvent, WindowEvent},
-    event_loop::ActiveEventLoop,
-};
+use super::event::{EventHandler, EventProcessor};
+use crate::{log_debug, Rupy};
+use pollster::FutureExt;
+use std::borrow::{BorrowMut, Cow};
+use wgpu::ShaderModuleDescriptor;
+use wgpu::ShaderSource;
+use winit::event::DeviceEvent;
 
-use super::{
-    event::{EventHandler, EventProcessor},
-    state::ApplicationState,
-};
+fn load_shaders(device: &wgpu::Device) -> (wgpu::ShaderModule, wgpu::ShaderModule) {
+    let vertex_shader = device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("Vertex Shader"),
+        source: ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+            "../../static/shader/vertex.wgsl"
+        ))),
+    });
+
+    let fragment_shader = device.create_shader_module(ShaderModuleDescriptor {
+        label: Some("Fragment Shader"),
+        source: ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+            "../../static/shader/fragment.wgsl"
+        ))),
+    });
+
+    (vertex_shader, fragment_shader)
+}
 
 impl winit::application::ApplicationHandler for Rupy {
     fn resumed(&mut self, el: &winit::event_loop::ActiveEventLoop) {
-        self.state
-            .is_none()
-            .then(|| self.state = Some(rehydrate(el)));
+        if self.state.is_none() {
+            let _ = self.rehydrate(&el).block_on();
+        }
     }
     fn new_events(
         &mut self,
         el: &winit::event_loop::ActiveEventLoop,
         cause: winit::event::StartCause,
     ) {
+        let res = self.state.borrow_mut();
+        let state = match res {
+            Some(state) => state,
+            None => return,
+        };
+        match cause {
+            winit::event::StartCause::ResumeTimeReached {
+                start,
+                requested_resume,
+            } => {
+                // Handle logic when the resume time is reached
+            }
+            winit::event::StartCause::WaitCancelled {
+                start,
+                requested_resume,
+            } => {
+                // Handle logic when wait is cancelled
+            }
+            winit::event::StartCause::Poll => {}
+            winit::event::StartCause::Init => {
+                // Initial setup for the rendering
+            }
+        }
     }
 
     fn window_event(
         &mut self,
         el: &winit::event_loop::ActiveEventLoop,
         id: winit::window::WindowId,
-        event: WindowEvent,
+        event: winit::event::WindowEvent,
     ) {
-        let state = match self.state.borrow_mut() {
-            Some(app_mut) => app_mut,
-            None => {
-                log_debug!("Failed to borrow state as mutable: {:?}", event);
-                return;
-            }
-        };
-    }
+        if let Some(state) = &mut self.state {
+            match event {
+                winit::event::WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
+                }
+                winit::event::WindowEvent::RedrawRequested => {
+                    log_debug!("Redraw requested!");
+                    let frame = match state.surface.get_current_texture() {
+                        Ok(frame) => frame,
+                        Err(e) => {
+                            log::error!("Failed to acquire next swap chain texture: {:?}", e);
+                            return;
+                        }
+                    };
 
+                    // Create a view of the frame's texture
+                    let output_view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    let device = state.device.clone();
+                    let queue = state.queue.clone();
+                    let swap_chain_format = state.swap_chain_format;
+                    let perspective = state.perspective.clone();
+                    // Create a command encoder
+                    let mut encoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
+                    let (vertex, fragment) = load_shaders(&device);
+                    // Render the scene
+                    state.create_and_render_scene(
+                        &device,
+                        &queue,
+                        swap_chain_format,
+                        &output_view, // Pass the texture view as output_view
+                        &mut encoder, // Pass the command encoder
+                        &vertex,
+                        &fragment,
+                        &perspective,
+                    );
+
+                    // Submit the command encoder
+                    state.queue.submit(Some(encoder.finish()));
+
+                    // Present the frame
+                    frame.present();
+                }
+                _ => {}
+            }
+        }
+    }
     fn device_event(
         &mut self,
         el: &winit::event_loop::ActiveEventLoop,
@@ -49,57 +127,5 @@ impl winit::application::ApplicationHandler for Rupy {
             winit::event::Event::UserEvent(event),
             el,
         );
-    }
-}
-
-fn rehydrate(el: &ActiveEventLoop) -> ApplicationState {
-    let window = Arc::new(
-        el.create_window(crate::utilities::default_window_attributes(None, None))
-            .expect("Create window failed on resume"),
-    );
-
-    let gpu_res = pollster::block_on(GPUGlobal::initialize(Some(InstanceDescriptor::default())));
-    let gpu = match gpu_res {
-        Ok(initialized) => initialized,
-        Err(e) => {
-            log_error!("{:?}", e);
-            panic!("{}", format!("{:?}", e));
-        }
-    };
-
-    let instance = gpu.instance();
-
-    let instance = instance.read().expect("Failed to lock the instance");
-
-    let surface = instance
-        .create_surface(window.clone())
-        .expect("Failed to create surface");
-
-    let device = gpu.device().clone();
-    let adapter = gpu.adapter();
-
-    let adapter = adapter.read().expect("Failed to lock the adapter");
-
-    let surface_format = surface.get_capabilities(&adapter).formats[0];
-    let surface_config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface_format,
-        width: window.inner_size().width,
-        height: window.inner_size().height,
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: wgpu::CompositeAlphaMode::Auto,
-        view_formats: vec![],
-        desired_maximum_frame_latency: 2,
-    };
-
-    match pollster::block_on(ApplicationState::build(
-        TargetSurface::new(window, device, surface_config, surface),
-        Some(InstanceDescriptor::default()),
-    )) {
-        Ok(rehydrated) => rehydrated,
-        Err(e) => {
-            log_error!("Failed to initialize application state: {:?}", e);
-            panic!("{}", format!("{:?}", e));
-        }
     }
 }

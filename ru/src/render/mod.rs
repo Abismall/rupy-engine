@@ -1,25 +1,25 @@
-use wgpu::util::DeviceExt;
+use wgpu::{BindGroup, Buffer, ShaderModule};
+
+use crate::pipeline::cache::PipelineCache;
 
 pub mod command;
-pub mod layout;
-pub mod pass;
-pub mod surface;
-pub mod traits;
-pub fn create_vertex_buffer<T: bytemuck::Pod>(
-    device: &wgpu::Device,
-    vertices: &[T],
-) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Vertex Buffer"),
-        contents: bytemuck::cast_slice(vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    })
-}
 
-pub fn create_index_buffer(device: &wgpu::Device, indices: &[u32]) -> wgpu::Buffer {
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Index Buffer"),
-        contents: bytemuck::cast_slice(indices),
-        usage: wgpu::BufferUsages::INDEX,
-    })
+pub trait Renderable {
+    fn create_buffers(&mut self, device: &wgpu::Device);
+    fn vertex_buffer(&self) -> &wgpu::Buffer;
+    fn index_buffer(&self) -> &wgpu::Buffer;
+    fn num_indices(&self) -> u32;
+    fn is_textured(&self) -> bool;
+    fn update(&mut self);
+    fn render(
+        &mut self,
+        device: &wgpu::Device,
+        pipeline_cache: &mut PipelineCache,
+        swapchain_format: wgpu::TextureFormat,
+        vertex_shader_src: &ShaderModule,
+        fragment_shader_src: &ShaderModule,
+        encoder: &mut wgpu::CommandEncoder,
+        output_view: &wgpu::TextureView,
+        global_bind_group: &wgpu::BindGroup,
+    );
 }

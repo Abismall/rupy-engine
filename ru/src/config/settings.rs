@@ -12,15 +12,11 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(
-        fps: Option<bool>,
-        last_frame_time: Option<bool>,
-        mode: Option<RenderMode>,
-    ) -> Settings {
+    pub fn new() -> Settings {
         Settings {
-            fps: fps.unwrap_or_else(|| false),
-            last_frame_time: last_frame_time.unwrap_or_else(|| false),
-            mode: mode.unwrap_or_else(|| RenderMode::Normal),
+            fps: false,
+            last_frame_time: false,
+            mode: RenderMode::Normal,
         }
     }
 

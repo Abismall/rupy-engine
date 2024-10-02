@@ -13,6 +13,7 @@ async fn main() -> Result<(), AppError> {
     }
 
     let evt_loop = winit::event_loop::EventLoop::new()?;
+    evt_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
     let mut app = Rupy::new();
 
     let _ = evt_loop.run_app(&mut app);

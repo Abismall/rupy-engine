@@ -33,3 +33,20 @@ impl DebugMetrics {
         self.last_frame_time = now;
     }
 }
+pub enum DebugEvent {
+    Rehydrated,
+    Initialized,
+    Error(String),  // Error variant can carry a message
+    Custom(String), // For custom event messages
+}
+
+impl DebugEvent {
+    pub fn to_log(&self) -> String {
+        match self {
+            DebugEvent::Rehydrated => "[REHYDRATED]".to_string(),
+            DebugEvent::Initialized => "[INITIALIZED]".to_string(),
+            DebugEvent::Error(msg) => format!("[ERROR] {}", msg),
+            DebugEvent::Custom(msg) => format!("[EVENT] {}", msg),
+        }
+    }
+}

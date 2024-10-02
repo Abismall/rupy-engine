@@ -4,8 +4,6 @@ use winit::{
     window::WindowId,
 };
 
-use crate::log_debug;
-
 pub enum WindowAction {
     Resize(winit::dpi::PhysicalSize<u32>),
     Resume(bool),
@@ -101,7 +99,6 @@ impl EventProcessor for EventHandler {
 // }
 
 pub fn process_new_events(cause: winit::event::StartCause) -> Actions {
-    log_debug!("{:?}", cause);
     match cause {
         winit::event::StartCause::ResumeTimeReached { .. } => Actions::Window(WindowAction::None),
         winit::event::StartCause::WaitCancelled { .. } => Actions::Window(WindowAction::None),

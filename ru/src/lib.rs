@@ -46,6 +46,13 @@ macro_rules! log_error {
         log::error!($($arg)*);
     };
 }
+#[cfg(feature = "logging")]
+#[macro_export]
+macro_rules! log_warning {
+    ($($arg:tt)*) => {
+        log::warn!($($arg)*);
+    };
+}
 
 #[cfg(not(feature = "logging"))]
 #[macro_export]

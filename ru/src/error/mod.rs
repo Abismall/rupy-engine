@@ -6,6 +6,8 @@ use winit::raw_window_handle::HandleError;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("StateRehydrationError: {0}")]
+    StateRehydrationError(String),
     #[error("WinitEventLoopError: {0}")]
     WinitEventLoopError(#[from] winit::error::EventLoopError),
     #[error("RawWindowHandleError: {0}")]
