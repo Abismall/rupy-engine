@@ -13,7 +13,6 @@ pub struct RenderPipelineBuilder<'a> {
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
-    // Constructor
     pub fn new(device: &'a wgpu::Device) -> Self {
         Self {
             device,
@@ -28,7 +27,6 @@ impl<'a> RenderPipelineBuilder<'a> {
         }
     }
 
-    // Set the global bind group layout
     pub fn with_global_bind_group_layout(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
         self.global_bind_group_layout = Some(layout);
         self
@@ -37,38 +35,32 @@ impl<'a> RenderPipelineBuilder<'a> {
         self.camera_bind_group_layout = Some(layout);
         self
     }
-    // Set the mesh bind group layout
     pub fn with_mesh_bind_group_layout(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
         self.mesh_bind_group_layout = Some(layout);
         self
     }
 
-    // Set the texture bind group layout
     pub fn with_texture_bind_group_layout(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
         self.texture_bind_group_layout = Some(layout);
-        self.use_texture = true; // Enable texture support
+        self.use_texture = true;
         self
     }
 
-    // Set the vertex shader
     pub fn with_vertex_shader(mut self, shader: &'a wgpu::ShaderModule) -> Self {
         self.vertex_shader = Some(shader);
         self
     }
 
-    // Set the fragment shader
     pub fn with_fragment_shader(mut self, shader: &'a wgpu::ShaderModule) -> Self {
         self.fragment_shader = Some(shader);
         self
     }
 
-    // Enable lighting support (could add more bindings for lights)
     pub fn with_lighting(mut self) -> Self {
         self.use_lighting = true;
         self
     }
 
-    // Build the pipeline
     pub fn build(self) -> Result<wgpu::RenderPipeline, AppError> {
         let global_bind_group_layout = self
             .global_bind_group_layout
@@ -118,7 +110,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                     module: fragment_shader,
                     entry_point: "fs_main",
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: wgpu::TextureFormat::Bgra8UnormSrgb, // Adjust according to your needs
+                        format: wgpu::TextureFormat::Bgra8UnormSrgb,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],

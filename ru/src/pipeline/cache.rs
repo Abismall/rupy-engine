@@ -37,7 +37,6 @@ impl PipelineCache {
     ) -> Result<Arc<RenderPipeline>, AppError> {
         let pipeline_cache = &mut self.pipelines;
 
-        // Use the cache or create a new pipeline
         Ok(get_or_create(pipeline_cache_key, pipeline_cache, || {
             log_debug!("Pipeline not found in cache, creating new render pipeline.");
 

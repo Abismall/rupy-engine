@@ -59,14 +59,6 @@ pub struct RectPos {
 //             color = self.color_active;
 //             border_color = self.border_color_active;
 //         }
-
-//         //  -1, 1    1,1
-//         //  A--------D
-//         //  |        |
-//         //  |        |
-//         //  |        |
-//         //  B--------C
-//         //  -1, -1   1, -1
 //         [
 //             GuiVertex {
 //                 // A

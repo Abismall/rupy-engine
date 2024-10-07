@@ -31,7 +31,6 @@ impl Console {
         }
     }
 
-    // This function subscribes to the event bus
     pub fn subscribe_to_events(
         console: Arc<Mutex<Console>>,
         event_bus: &mut EventBusProxy<RupyAppEvent>,

@@ -2,15 +2,16 @@ use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use wgpu::SurfaceConfiguration;
 use winit::{
+    dpi::PhysicalSize,
     event_loop::{ActiveEventLoop, ControlFlow},
     window::{Window, WindowAttributes, WindowId},
 };
 
-use crate::{log_info, AppError, Rupy, SystemEvent};
+use crate::prelude::{rupy::Rupy, AppError};
 
 pub trait WindowManager {
     fn configure_surface(
-        window: &Window,
+        size: PhysicalSize<u32>,
         surface: &wgpu::Surface,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
@@ -21,8 +22,6 @@ pub trait WindowManager {
         el: &ActiveEventLoop,
         control_flow: Option<ControlFlow>,
     ) -> Result<Window, AppError>;
-
-    fn destroy_window(&mut self, window_id: WindowId);
 }
 
 #[derive(Debug)]
@@ -56,30 +55,17 @@ impl WindowManager for Rupy {
         let window = el
             .create_window(window_attributes)
             .map_err(|e| AppError::from(e))?;
-        let _ = self
-            .tx
-            .send(SystemEvent::In(super::bus::SystemEventIn::CreateWindow(
-                window.id(),
-            )));
 
         Ok(window)
     }
 
-    fn destroy_window(&mut self, window_id: WindowId) {
-        log_info!("Destroying window: {:?}", window_id);
-        self.tx
-            .send(SystemEvent::In(
-                crate::application::bus::SystemEventIn::Shutdown,
-            ))
-            .expect("Failed to send DestroyWindow command");
-    }
     fn configure_surface(
-        window: &Window,
+        size: PhysicalSize<u32>,
         surface: &wgpu::Surface,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
     ) -> Result<SurfaceConfiguration, AppError> {
-        let window_size = window.inner_size();
+        let window_size = size;
         let surface_caps = surface.get_capabilities(adapter);
         let swap_chain_format = surface_caps.formats[0];
 

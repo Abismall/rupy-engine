@@ -36,8 +36,8 @@ impl DebugMetrics {
 pub enum DebugEvent {
     Rehydrated,
     Initialized,
-    Error(String),  // Error variant can carry a message
-    Custom(String), // For custom event messages
+    Error(String),
+    Custom(String),
 }
 
 impl DebugEvent {

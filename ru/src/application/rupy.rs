@@ -7,7 +7,7 @@ use wgpu::{core::instance::RequestAdapterOptions, Adapter, Device, Queue};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::ActiveEventLoop,
+    event_loop::{ActiveEventLoop, ControlFlow},
     window::{WindowAttributes, WindowId},
 };
 
@@ -18,6 +18,7 @@ use crate::{
     input::{manager::InputManager, InputEvent},
     log_debug, log_info, log_warning,
     prelude::{AppError, CameraPerspective},
+    render::window::{RupyWindow, WindowManager},
     rupyLogger::LogFactory,
 };
 
@@ -95,7 +96,7 @@ impl Rupy {
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<Arc<winit::window::Window>, AppError> {
-        let window = Arc::new(event_loop.create_window(WindowAttributes::default())?);
+        let window = Arc::new(self.create_window(RupyWindow::Main, event_loop, None)?);
         let id = window.id();
         let size = window.inner_size();
 
@@ -162,9 +163,12 @@ impl ApplicationHandler<RupyAppEvent> for Rupy {
             }
             WindowEvent::Resized(size) => {
                 if let Some(device) = &self.device {
-                    if let Some(surface) = &mut self.surface {
-                        let tx_resize = self.tx.clone();
-                        surface.resize(&device, size, tx_resize).ok(); // Channel: window_resize
+                    if let Some(adapter) = &self.adapter {
+                        if let Some(surface) = &mut self.surface {
+                            let tx_resize = self.tx.clone();
+                            let _ =
+                                Self::configure_surface(size, &surface.surface, &adapter, device);
+                        }
                     }
                 }
             }

@@ -19,10 +19,10 @@ pub struct Text {
 pub const FONT_SIZE: f32 = 30.0;
 pub const LINE_HEIGHT: f32 = 42.0;
 pub struct TextConfig {
-    pub content: String,     // The actual text to display
-    pub position: RectPos,   // The position of the text on the screen (RectPos is already defined)
-    pub text_color: Color,   // The color of the text
-    pub border_color: Color, // Optional border color around the text (if any)
+    pub content: String,
+    pub position: RectPos,
+    pub text_color: Color,
+    pub border_color: Color,
 }
 
 impl Text {

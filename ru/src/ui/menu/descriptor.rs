@@ -14,7 +14,7 @@
 
 //         match menu {
 //             MenuType::Main => {
-//                 // Header Text (larger and centered)
+//
 //                 descriptor.components.push(Component::Text(
 //                     Id(0),
 //                     text::Text::new(
@@ -31,7 +31,7 @@
 //                     ),
 //                 ));
 
-//                 // Centered Buttons
+//
 //                 descriptor.components.push(Component::Button(
 //                     Id(1),
 //                     Button::new(
@@ -102,7 +102,7 @@
 //                 ));
 //             }
 //             MenuType::Settings => {
-//                 // Header Text
+//
 //                 descriptor.components.push(Component::Text(
 //                     Id(0),
 //                     text::Text::new(
@@ -119,7 +119,7 @@
 //                     ),
 //                 ));
 
-//                 // TextField for user input, centered
+//
 //                 descriptor.components.push(Component::TextField(
 //                     Id(1),
 //                     TextField::new(
