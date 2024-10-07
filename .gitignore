@@ -4,3 +4,7 @@ __pycache__
 venv/
 *.log
 dist/
+.git
+target
+build
+release

@@ -1,109 +1,146 @@
-use winit::{
-    event::{Event, InnerSizeWriter, WindowEvent},
-    event_loop::ActiveEventLoop,
-    window::WindowId,
-};
+use std::sync::Arc;
 
-pub enum WindowAction {
-    Resize(winit::dpi::PhysicalSize<u32>),
-    Resume(bool),
-    Redraw(WindowId),
-    Scale(f64, InnerSizeWriter),
-    Flush(WindowId),
-    Exit(WindowId),
+use log::Level;
+use winit::event_loop::EventLoopProxy;
+
+#[derive(Clone, Debug)]
+pub enum RupyAppEvent {
+    OpenConsole,
+    CloseConsole,
+    ToggleConsole,
+
+    ToggleAudio,
+    AudioMuteOn,
+    AudioMuteOff,
+    VolumeUp,
+    VolumeDown,
+
+    CloseRequested,
+    KeyPressed {
+        key_code: u32,
+        modifiers: Modifiers, // Control, Shift, Alt, etc.
+    },
+    KeyReleased {
+        key_code: u32,
+        modifiers: Modifiers,
+    },
+    MouseMoved {
+        position: (f32, f32), // (x, y) coordinates of the cursor
+    },
+    MouseButtonPressed {
+        button: MouseButton, // Left, Right, Middle, etc.
+        position: (f32, f32),
+    },
+    MouseButtonReleased {
+        button: MouseButton,
+        position: (f32, f32),
+    },
+    MouseWheel {
+        delta: f32, // Scroll amount
+        position: (f32, f32),
+    },
+    TouchStart {
+        id: u64,              // Identifier for the touch point
+        position: (f32, f32), // Start position of the touch
+    },
+    TouchMove {
+        id: u64,
+        position: (f32, f32),
+    },
+    TouchEnd {
+        id: u64,
+        position: (f32, f32),
+    },
+
+    WindowResized {
+        width: u32,
+        height: u32,
+    },
+    WindowClosed,
+    WindowFocused {
+        focused: bool,
+    },
+    WindowMoved {
+        position: (i32, i32),
+    },
+    WindowMinimized,
+    WindowRestored,
+
+    AppStarted,
+    AppSuspended,
+    AppResumed,
+    AppClosed,
+
+    SceneLoaded {
+        scene_name: String,
+    },
+    SceneUnloaded {
+        scene_name: String,
+    },
+    ObjectSpawned {
+        object_id: u64,
+        object_type: String,
+    },
+    ObjectDestroyed {
+        object_id: u64,
+        object_type: String,
+    },
+
+    InputCommand {
+        command: String,
+    },
+
+    FrameRendered {
+        frame_time: f64,
+    },
+    RenderError {
+        message: String,
+    },
+
+    AudioStarted {
+        sound_id: u64,
+    },
+    AudioStopped {
+        sound_id: u64,
+    },
+    AudioError {
+        sound_id: u64,
+        message: String,
+    },
+}
+#[derive(Debug, Clone)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Other(u8), // (e.g., forward/backward buttons on a mouse)
+}
+
+#[derive(Debug, Clone)]
+pub enum Modifiers {
+    Shift,
+    Control,
+    Alt,
+    Meta, // MacOS "Command" key
     None,
 }
 
-pub enum Actions {
-    Window(WindowAction),
+pub trait EventProxyTrait<T: 'static + std::fmt::Debug> {
+    fn send_event(&self, event: T) -> Result<(), winit::event_loop::EventLoopClosed<T>>;
 }
 
-pub trait EventProcessor {
-    fn process<T>(event: Event<T>, el: &ActiveEventLoop) -> Actions;
-    fn process_window_event(
-        window_id: WindowId,
-        event: WindowEvent,
-        el: &ActiveEventLoop,
-    ) -> Actions;
+pub struct EventProxy<T: 'static + std::fmt::Debug> {
+    event_loop_proxy: Arc<EventLoopProxy<T>>,
 }
-pub struct EventHandler;
-impl EventProcessor for EventHandler {
-    fn process<T>(event: Event<T>, el: &ActiveEventLoop) -> Actions {
-        let action = match event {
-            Event::NewEvents(start_cause) => process_new_events(start_cause),
-            Event::WindowEvent { window_id, event } => {
-                <EventHandler as EventProcessor>::process_window_event(window_id, event, el)
-            }
-            Event::DeviceEvent { .. } => Actions::Window(WindowAction::None),
-            Event::UserEvent(_) => Actions::Window(WindowAction::None),
-            Event::Suspended => Actions::Window(WindowAction::None),
-            Event::Resumed => Actions::Window(WindowAction::None),
-            Event::AboutToWait => Actions::Window(WindowAction::None),
-            Event::LoopExiting => Actions::Window(WindowAction::None),
-            Event::MemoryWarning => Actions::Window(WindowAction::None),
-        };
-        match action {
-            Actions::Window(WindowAction::Resize(..)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::Resume(_)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::Redraw(..)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::Scale(_, ..)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::Flush(..)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::Exit(..)) => Actions::Window(WindowAction::None),
-            Actions::Window(WindowAction::None) => Actions::Window(WindowAction::None),
-        }
-    }
-    fn process_window_event(
-        window_id: WindowId,
-        event: WindowEvent,
-        el: &ActiveEventLoop,
-    ) -> Actions {
-        match event {
-            WindowEvent::Resized(physical_size) => {
-                Actions::Window(WindowAction::Resize(physical_size))
-            }
-            WindowEvent::CloseRequested => Actions::Window(WindowAction::Exit(window_id)),
-            WindowEvent::RedrawRequested => Actions::Window(WindowAction::Redraw(window_id)),
-            WindowEvent::ScaleFactorChanged {
-                scale_factor,
-                inner_size_writer,
-            } => Actions::Window(WindowAction::Scale(scale_factor, inner_size_writer)),
-            _ => Actions::Window(WindowAction::None),
-        }
+
+impl<T: 'static + std::fmt::Debug> EventProxy<T> {
+    pub fn new(event_loop_proxy: Arc<EventLoopProxy<T>>) -> Self {
+        Self { event_loop_proxy }
     }
 }
 
-// pub fn device_event(device_id: DeviceId, event: DeviceEvent, el: &ActiveEventLoop) -> Actions {
-//     match event {
-//         // DeviceEvent::MouseMotion { delta } => Actions::Device(Actions;:(delta)),
-//         // DeviceEvent::MouseWheel { delta } => match delta {
-//         //     MouseScrollDelta::LineDelta(x, y) => Actions::Device(DeviceEnum::MouseWheel(x, y)),
-//         //     _ => Actions::Device(DeviceEnum::None(device_id)),
-//         // },
-//         // DeviceEvent::Key(key_event) => match key_event.physical_key {
-//         //     PhysicalKey::Code(KeyCode::KeyW) => {
-//         //         Actions::Device(DeviceEnum::MoveForward(key_event.state))
-//         //     }
-//         //     PhysicalKey::Code(KeyCode::KeyS) => {
-//         //         Actions::Device(DeviceEnum::MoveBackward(key_event.state))
-//         //     }
-//         //     PhysicalKey::Code(KeyCode::KeyA) => {
-//         //         Actions::Device(DeviceEnum::MoveLeft(key_event.state))
-//         //     }
-//         //     PhysicalKey::Code(KeyCode::KeyD) => {
-//         //         Actions::Device(DeviceEnum::MoveRight(key_event.state))
-//         //     }
-//         //     _ => Actions::Device(DeviceEnum::None(device_id)),
-//         // },
-//         _ => Actions::Device(Actions::None),
-//     }
-// }
-
-pub fn process_new_events(cause: winit::event::StartCause) -> Actions {
-    match cause {
-        winit::event::StartCause::ResumeTimeReached { .. } => Actions::Window(WindowAction::None),
-        winit::event::StartCause::WaitCancelled { .. } => Actions::Window(WindowAction::None),
-        winit::event::StartCause::Poll | winit::event::StartCause::Init => {
-            Actions::Window(WindowAction::None)
-        }
+impl<T: 'static + std::fmt::Debug> EventProxyTrait<T> for EventProxy<T> {
+    fn send_event(&self, event: T) -> Result<(), winit::event_loop::EventLoopClosed<T>> {
+        self.event_loop_proxy.send_event(event)
     }
 }

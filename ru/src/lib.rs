@@ -1,23 +1,21 @@
-pub(crate) mod application;
-pub(crate) mod camera;
-pub(crate) mod config;
-pub(crate) mod error;
-pub(crate) mod files;
-pub(crate) mod gpu;
-pub(crate) mod input;
-pub(crate) mod math;
-pub(crate) mod menu;
-pub(crate) mod object;
-pub(crate) mod pipeline;
-pub(crate) mod render;
-pub(crate) mod scene;
-pub(crate) mod shader;
-pub(crate) mod text;
-pub(crate) mod texture;
-pub(crate) mod utilities;
+pub mod application;
+pub mod audio;
+pub mod camera;
+pub mod console;
+pub mod core;
+pub mod ecs;
+pub mod gpu;
+pub mod input;
+pub mod pipeline;
+pub mod render;
+pub mod scene;
+pub mod shader;
+pub mod ui;
+pub mod utilities;
+
 #[cfg(feature = "logging")]
-pub use crate::utilities::logger as rupyLogger;
-//
+pub use core::log as rupyLogger;
+
 #[cfg(feature = "logging")]
 #[macro_export]
 macro_rules! log_debug {
@@ -32,13 +30,6 @@ macro_rules! log_info {
         log::info!($($arg)*);
     };
 }
-
-#[cfg(not(feature = "logging"))]
-#[macro_export]
-macro_rules! log_debug {
-    ($($arg:tt)*) => {};
-}
-
 #[cfg(feature = "logging")]
 #[macro_export]
 macro_rules! log_error {
@@ -56,9 +47,43 @@ macro_rules! log_warning {
 
 #[cfg(not(feature = "logging"))]
 #[macro_export]
+macro_rules! log_debug {
+    ($($arg:tt)*) => {};
+}
+#[cfg(not(feature = "logging"))]
+#[macro_export]
+macro_rules! log_info {
+    ($($arg:tt)*) => {};
+}
+#[cfg(not(feature = "logging"))]
+#[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {};
 }
+#[cfg(not(feature = "logging"))]
+#[macro_export]
+macro_rules! log_warning {
+    ($($arg:tt)*) => {};
+}
 
-pub use application::app::Rupy;
-pub use error::AppError;
+pub mod prelude {
+    pub use crate::application::bus::EventBusProxy;
+    pub use crate::application::event::EventProxy;
+    pub use crate::application::event::RupyAppEvent;
+    pub use crate::application::rupy;
+    pub use crate::audio::Audio;
+    pub use crate::camera::perspective::CameraPerspective;
+    pub use crate::camera::Camera;
+    pub use crate::console::Console;
+    pub use crate::core::error::AppError;
+    pub use crate::core::math::spatial::*;
+    pub use crate::core::math::trigonometry::*;
+    pub use crate::core::math::vector::*;
+    pub use crate::input::binding::InputBindings;
+    pub use crate::input::manager::InputManager;
+    pub use crate::scene::object;
+    pub use crate::scene::scene;
+    pub use crate::scene::texture;
+    pub use crate::shader::reflection;
+    pub use crate::shader::source;
+}

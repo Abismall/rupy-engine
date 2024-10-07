@@ -1,7 +1,8 @@
+pub(crate) mod binding;
 pub(crate) mod handler;
-pub(crate) mod traits;
-
-use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, RawKeyEvent};
+pub(crate) mod manager;
+pub use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, RawKeyEvent};
+#[derive(Debug, Clone)]
 pub enum InputEvent {
     Key(KeyEvent),
     RawKey(RawKeyEvent),
