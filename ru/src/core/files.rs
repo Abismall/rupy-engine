@@ -4,14 +4,42 @@ use std::io::{self, BufRead, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::{ffi::OsStr, io::Write};
 
-use super::error::AppError;
+use crate::log_error;
 
+use super::error::AppError;
+/// A builder-like struct for chaining `push` operations on a `PathBuf`.
 #[derive(Debug, Clone)]
+pub struct PathBuilder {
+    pub path: PathBuf,
+}
+
+impl PathBuilder {
+    /// Creates a new `PathBuilder` with the given base path.
+    pub fn new(base: PathBuf) -> Self {
+        Self { path: base }
+    }
+
+    /// Pushes a new component onto the path.
+    pub fn push<T: AsRef<Path>>(mut self, component: T) -> Self {
+        self.path.push(component);
+        self
+    }
+
+    /// Finalizes the builder and returns the constructed `PathBuf`.
+    pub fn build(self) -> String {
+        self.path.display().to_string()
+    }
+}
+#[derive(Debug, Clone, Copy)]
 pub enum FileType {
     Image,
 }
 pub struct FileSystem;
 impl FileSystem {
+    pub fn cargo_manifest_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
     pub fn resolve_static_path(path: &str) -> Result<PathBuf, AppError> {
         let resolved_path = fs::canonicalize(PathBuf::from(path))?;
         Ok(resolved_path)
@@ -75,6 +103,20 @@ impl FileSystem {
             }
         }
         Ok(files)
+    }
+    pub fn load_image_file(file_path: &str) -> Result<DynamicImage, AppError> {
+        match image::open(file_path) {
+            Ok(texture) => Ok(texture),
+            Err(e) => {
+                log_error!("Failed to load texture file: {}", e.to_string());
+                Err(AppError::ImageError(e))
+            }
+        }
+    }
+    pub fn append_to_cargo_dir(path: &str) -> String {
+        let mut cargo_manifest_dir = FileSystem::cargo_manifest_dir();
+        cargo_manifest_dir.push(path);
+        cargo_manifest_dir.display().to_string()
     }
 
     pub fn list_files_with_extension<P: AsRef<Path>, E: AsRef<OsStr>>(

@@ -1,201 +1,228 @@
-use std::{collections::HashMap, sync::Arc};
-
 use crossbeam::channel::Sender;
+use glyphon::{Resolution, TextBounds};
+use winit::{event_loop::ActiveEventLoop, window::WindowAttributes};
 
-use pollster::FutureExt;
-use wgpu::{core::instance::RequestAdapterOptions, Adapter, Device, Queue};
-use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow},
-    window::{WindowAttributes, WindowId},
-};
-
+use super::{resources::ResourceManager, state::AppState, worker::RupyWorkerTask};
 #[cfg(feature = "logging")]
 use crate::rupyLogger;
 use crate::{
-    camera::{perspective::CameraPreset, Camera},
-    input::{manager::InputManager, InputEvent},
-    log_debug, log_info, log_warning,
-    prelude::{AppError, CameraPerspective},
-    render::window::{RupyWindow, WindowManager},
-    rupyLogger::LogFactory,
+    core::{error::AppError, time::Time},
+    events::RupyAppEvent,
+    graphics::gpu::{get_device, get_instance},
+    log_info,
+    model::{surface::SurfaceWrapper, window::WindowWrapper},
+    scene::systems::render::RenderSystem,
+    system::{
+        glyphon::{get_text_bounds, GlyphonRender},
+        input::manager::InputManager,
+    },
+    traits::bus::EventProxyTrait,
 };
-
-use super::{
-    event::{EventProxyTrait, RupyAppEvent},
-    SurfaceWrapper,
-};
+use std::sync::Arc;
 
 pub struct Rupy {
+    pub state: AppState,
+    pub resources: ResourceManager,
+    pub event_proxy: Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
+    pub event_tx: Arc<Sender<RupyAppEvent>>,
+    pub task_tx: Sender<RupyWorkerTask>,
+    pub input: InputManager,
     #[cfg(feature = "logging")]
-    logger: rupyLogger::LogFactory,
-    pub(crate) tx: Arc<Sender<RupyAppEvent>>,
-    input: InputManager,
-    adapter: Option<Arc<Adapter>>,
-    device: Option<Arc<Device>>,
-    queue: Option<Arc<Queue>>,
-    windows: HashMap<WindowId, WindowAttributes>,
-    surface: Option<SurfaceWrapper>,
-    camera: Camera,
-    perspective: CameraPerspective,
-    proxy: Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
+    pub logger: rupyLogger::factory::LogFactory,
+    pub renderer: Option<RenderSystem>,
+    pub glyphon: Option<GlyphonRender>,
+    pub time: Time,
+    pub device: Option<Arc<wgpu::Device>>,
+    pub queue: Option<Arc<wgpu::Queue>>,
+    pub surface: Option<SurfaceWrapper>,
+    pub window: WindowWrapper,
 }
-
 impl Rupy {
-    pub fn new(
-        tx: Arc<Sender<RupyAppEvent>>,
-        input: InputManager,
-        proxy: Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
-    ) -> Self {
-        Rupy {
-            tx,
-            input,
-            proxy,
-            camera: Camera::new(None),
-            perspective: CameraPerspective::from_preset(CameraPreset::Standard),
-            windows: HashMap::new(),
-            logger: LogFactory::default(),
-            adapter: None,
-            device: None,
-            queue: None,
-            surface: None,
-        }
-    }
-    fn is_initialized(&self) -> bool {
-        if self.windows.is_empty()
-            || self.device.is_none()
-            || self.queue.is_none()
-            || self.surface.is_none()
-        {
-            false
-        } else {
-            true
-        }
-    }
-    fn toggle_audio(&mut self) {
-        self.tx.send(RupyAppEvent::ToggleAudio).ok();
-    }
-    fn transmitter(&mut self) -> Arc<Sender<RupyAppEvent>> {
-        self.tx.clone()
-    }
-    fn register_window(&mut self, window_id: WindowId, attributes: WindowAttributes) {
-        if self.windows.contains_key(&window_id) {
-            return;
-        } else {
-            self.windows.insert(window_id, attributes);
-        }
-    }
-    pub fn set_event_proxy(
-        &mut self,
-        event_proxy: &Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
-    ) {
-        self.input.set_event_proxy(event_proxy.clone());
-    }
-    pub async fn initialize(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-    ) -> Result<Arc<winit::window::Window>, AppError> {
-        let window = Arc::new(self.create_window(RupyWindow::Main, event_loop, None)?);
-        let id = window.id();
-        let size = window.inner_size();
-
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
-        let surface = instance.create_surface(window.clone())?;
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .expect("Adapter"); // TODO: Fix
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
-            .await?;
-        self.device = Some(Arc::new(device));
-        self.adapter = Some(Arc::new(adapter));
-        self.queue = Some(Arc::new(queue));
-        self.surface = Some(SurfaceWrapper::new(surface));
-        self.register_window(id, WindowAttributes::default().with_inner_size(size));
-
-        Ok(window)
-    }
-
-    pub fn shutdown(&self, grace_period_secs: u64) {
-        let tx_clone = self.tx.clone();
+    pub fn exit_process(&mut self, grace_period_secs: u32) {
+        self.set_flag(AppState::SHUTDOWN);
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(grace_period_secs));
-            let _ = tx_clone.send(RupyAppEvent::CloseRequested);
-
+            log_info!("Shutting down in {}", grace_period_secs);
+            std::thread::sleep(std::time::Duration::from_secs(grace_period_secs.into()));
+            log_info!("Shutting down now.");
             std::process::exit(0);
         });
     }
-
-    pub fn update(&mut self) {}
-
-    pub fn render(&mut self) {}
-}
-
-impl ApplicationHandler<RupyAppEvent> for Rupy {
-    fn window_event(
+    pub fn create_window(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
+        attributes: WindowAttributes,
+        title: String,
+        width: f32,
+        height: f32,
     ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                self.shutdown(0);
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                self.input.handle_event(InputEvent::Key(event));
-            }
-            WindowEvent::Resized(size) => {
-                if let Some(device) = &self.device {
-                    if let Some(adapter) = &self.adapter {
-                        if let Some(surface) = &mut self.surface {
-                            let tx_resize = self.tx.clone();
-                            let _ =
-                                Self::configure_surface(size, &surface.surface, &adapter, device);
-                        }
-                    }
+        self.window
+            .set_window(event_loop, attributes, title, width, height);
+    }
+    pub fn create_and_configure_surface(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Result<(), AppError> {
+        let window = self
+            .window
+            .current
+            .as_ref()
+            .ok_or(AppError::NoActiveWindowError)?;
+        let instance = get_instance()?;
+        let surface = instance.create_surface(window.clone())?;
+
+        let surface_format = wgpu::TextureFormat::Bgra8UnormSrgb;
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width,
+            height,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        let device: &Arc<wgpu::Device> = &get_device()?;
+        surface.configure(device, &config);
+
+        self.surface = Some(SurfaceWrapper::new(config, surface));
+        log_info!(
+            "Surface configured with width: {}, height: {}",
+            width,
+            height
+        );
+
+        Ok(())
+    }
+
+    pub fn send_event(&self, event: RupyAppEvent) -> std::result::Result<(), AppError> {
+        self.event_tx.send(event).map_err(AppError::EventSendError)
+    }
+    pub fn send_task(&self, task: RupyWorkerTask) -> Result<(), AppError> {
+        self.task_tx
+            .send(task)
+            .map_err(AppError::TaskQueueSendError)
+    }
+    pub fn set_flag(&mut self, flag: AppState) {
+        self.state.set_flag(flag);
+    }
+    pub fn remove_flag(&mut self, flag: AppState) {
+        self.state.remove_flag(flag);
+    }
+    pub fn contains_flag(&self, flag: AppState) -> bool {
+        self.state.contains_flag(flag)
+    }
+}
+
+impl Rupy {
+    pub fn render_pass(&mut self) -> Result<(), AppError> {
+        if let Some(surface) = &self.surface {
+            let device = self
+                .device
+                .as_ref()
+                .ok_or(AppError::InstanceInitializationError)?;
+            let queue = self
+                .queue
+                .as_ref()
+                .ok_or(AppError::InstanceInitializationError)?;
+
+            let frame = surface
+                .current
+                .get_current_texture()
+                .map_err(|e| AppError::SurfaceError(e))?;
+            let view = frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+            let render_pass_descriptor = wgpu::RenderPassDescriptor {
+                label: Some("Main Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            };
+            {
+                let mut render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+
+                if let Some(glyphon) = &self.glyphon {
+                    glyphon.render(&mut render_pass)?;
                 }
             }
-            _ => {}
+
+            queue.submit(Some(encoder.finish()));
+
+            frame.present();
         }
+        Ok(())
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RupyAppEvent) {
-        match event {
-            RupyAppEvent::CloseRequested => {
-                event_loop.exit();
-                log_debug!("Bye!");
-                std::process::exit(0);
-            }
+    pub fn update(&mut self) -> Result<(), AppError> {
+        self.time.update();
 
-            _ => {}
+        if let Some(glyphon) = &mut self.glyphon {
+            let device = self
+                .device
+                .as_ref()
+                .ok_or(AppError::InstanceInitializationError)?;
+            let queue = self
+                .queue
+                .as_ref()
+                .ok_or(AppError::InstanceInitializationError)?;
+
+            let text = format!("{:#?}", self.time.debug(),);
+
+            let inner_size = self.window.size();
+            let text_bounds = get_text_bounds(
+                inner_size.width as i32,
+                inner_size.height as i32,
+                Some(10),
+                Some(10),
+            );
+
+            Self::prepare_text(
+                device,
+                queue,
+                text,
+                Resolution {
+                    width: inner_size.width,
+                    height: inner_size.height,
+                },
+                text_bounds,
+                glyphon,
+            );
         }
+
+        Ok(())
     }
 
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if !self.is_initialized() {
-            if let Err(e) = self.initialize(event_loop).block_on() {
-                log_warning!("Failed to initialize state on resume: {:?}", e);
-            }
-        }
-    }
-    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        log_info!("Event loop exit: {:?}", _event_loop);
+    pub(crate) fn prepare_text(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        text: String,
+        resolution: Resolution,
+        bounds: TextBounds,
+        glyphon: &mut GlyphonRender,
+    ) {
+        glyphon.reconfigure(queue, resolution);
+        glyphon.set_buffer_size((resolution.width as f32, resolution.height as f32));
+        glyphon.set_buffer_text(&text);
+        glyphon.prepare_text(&device, &queue, bounds).ok();
+        glyphon.shape_until_scroll(false);
     }
 }

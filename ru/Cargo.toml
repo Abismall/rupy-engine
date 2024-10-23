@@ -27,6 +27,12 @@ egui-winit = "0.29.1"
 egui-wgpu = "0.29.1"
 cfg-if = "1.0.0"
 once_cell = "1.20.2"
+bitflags = "2.6.0"
+
+[dev-dependencies]
+mockall = "0.13.0"
+
+
 
 
 
@@ -42,5 +48,9 @@ serialize = ["serde", "serde_derive"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "rupy"
-path = "src/main.rs"
+name = "engine"
+path = "src/bin/engine.rs"
+
+[[bin]]
+name = "resize_images"
+path = "src/bin/resize_image.rs"

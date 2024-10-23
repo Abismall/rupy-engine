@@ -1,9 +1,0 @@
-pub mod animation;
-pub mod color;
-pub mod instanced;
-pub mod lighting;
-pub mod material;
-pub mod object;
-pub mod physics;
-pub mod shape;
-pub mod traits;
