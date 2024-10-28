@@ -1,98 +1,71 @@
 use crossbeam::channel::Sender;
 use glyphon::{Resolution, TextBounds};
-use winit::{event_loop::ActiveEventLoop, window::WindowAttributes};
+use wgpu::{util::DeviceExt, IndexFormat, RenderPass};
 
-use super::{resources::ResourceManager, state::AppState, worker::RupyWorkerTask};
+use super::{
+    state::ApplicationStateFlags, surface::SurfaceWrapper, window::WindowWrapper,
+    worker::RupyWorkerTask, DebugMode,
+};
 #[cfg(feature = "logging")]
 use crate::rupyLogger;
 use crate::{
+    camera::{perspective::CameraPerspective, Camera},
     core::{error::AppError, time::Time},
     events::RupyAppEvent,
-    graphics::gpu::{get_device, get_instance},
-    log_info,
-    model::{surface::SurfaceWrapper, window::WindowWrapper},
-    scene::systems::render::RenderSystem,
-    system::{
-        glyphon::{get_text_bounds, GlyphonRender},
-        input::manager::InputManager,
+    graphics::glyphon::{get_text_bounds, GlyphonRender},
+    input::manager::InputManager,
+    log_error, log_info,
+    scene::{
+        components::{mesh::Mesh, uniform::CameraUniforms, vertex::Vertex},
+        material::{shaded::ShadedMaterial, textured::TexturedMaterial, Material},
     },
-    traits::bus::EventProxyTrait,
+    traits::{bus::EventProxyTrait, rendering::Renderable},
+    ui::menu::Menu,
 };
 use std::sync::Arc;
 
 pub struct Rupy {
-    pub state: AppState,
-    pub resources: ResourceManager,
+    pub state: ApplicationStateFlags,
     pub event_proxy: Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
     pub event_tx: Arc<Sender<RupyAppEvent>>,
     pub task_tx: Sender<RupyWorkerTask>,
     pub input: InputManager,
     #[cfg(feature = "logging")]
     pub logger: rupyLogger::factory::LogFactory,
-    pub renderer: Option<RenderSystem>,
+    pub debug_mode: DebugMode,
+    pub camera: Camera,
+    pub camera_perspective: CameraPerspective,
     pub glyphon: Option<GlyphonRender>,
+    pub shaded_material: Option<ShadedMaterial>,
+    pub textured_material: Option<TexturedMaterial>,
+    pub sampler: Option<wgpu::Sampler>,
+
+    pub model_uniform: Option<Arc<wgpu::Buffer>>,
+    pub global_uniform: Option<Arc<wgpu::Buffer>>,
+    pub view_matrix: [[f32; 4]; 4],
+    pub projection_matrix: [[f32; 4]; 4],
+    pub model_matrix: [[f32; 4]; 4],
     pub time: Time,
+    pub menu: Option<Menu>,
+    pub adapter: Option<Arc<wgpu::Adapter>>,
     pub device: Option<Arc<wgpu::Device>>,
     pub queue: Option<Arc<wgpu::Queue>>,
-    pub surface: Option<SurfaceWrapper>,
     pub window: WindowWrapper,
 }
+
 impl Rupy {
     pub fn exit_process(&mut self, grace_period_secs: u32) {
-        self.set_flag(AppState::SHUTDOWN);
+        if !self.state.contains(ApplicationStateFlags::SHUTTING_DOWN) {
+            self.state.set_shutting_down();
+        };
+
         std::thread::spawn(move || {
-            log_info!("Shutting down in {}", grace_period_secs);
+            if grace_period_secs > 0 {
+                log_info!("Shutdown in {}", grace_period_secs);
+            }
             std::thread::sleep(std::time::Duration::from_secs(grace_period_secs.into()));
-            log_info!("Shutting down now.");
             std::process::exit(0);
         });
-    }
-    pub fn create_window(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        attributes: WindowAttributes,
-        title: String,
-        width: f32,
-        height: f32,
-    ) {
-        self.window
-            .set_window(event_loop, attributes, title, width, height);
-    }
-    pub fn create_and_configure_surface(
-        &mut self,
-        width: u32,
-        height: u32,
-    ) -> Result<(), AppError> {
-        let window = self
-            .window
-            .current
-            .as_ref()
-            .ok_or(AppError::NoActiveWindowError)?;
-        let instance = get_instance()?;
-        let surface = instance.create_surface(window.clone())?;
-
-        let surface_format = wgpu::TextureFormat::Bgra8UnormSrgb;
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
-            width,
-            height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        let device: &Arc<wgpu::Device> = &get_device()?;
-        surface.configure(device, &config);
-
-        self.surface = Some(SurfaceWrapper::new(config, surface));
-        log_info!(
-            "Surface configured with width: {}, height: {}",
-            width,
-            height
-        );
-
-        Ok(())
     }
 
     pub fn send_event(&self, event: RupyAppEvent) -> std::result::Result<(), AppError> {
@@ -103,50 +76,167 @@ impl Rupy {
             .send(task)
             .map_err(AppError::TaskQueueSendError)
     }
-    pub fn set_flag(&mut self, flag: AppState) {
-        self.state.set_flag(flag);
+    pub fn ensure_device(&mut self) -> Result<(), AppError> {
+        if self.device.is_none() {
+            if let Err(e) = self.set_device() {
+                panic!("Could not ensure device: {:?}", e);
+            }
+        }
+        Ok(())
     }
-    pub fn remove_flag(&mut self, flag: AppState) {
-        self.state.remove_flag(flag);
+    pub fn ensure_queue(&mut self) -> Result<(), AppError> {
+        if self.queue.is_none() {
+            if let Err(e) = self.set_queue() {
+                panic!("Could not ensure queue: {:?}", e);
+            }
+        }
+        Ok(())
     }
-    pub fn contains_flag(&self, flag: AppState) -> bool {
-        self.state.contains_flag(flag)
+    pub fn try_get_surface(&self) -> Result<&SurfaceWrapper, AppError> {
+        self.window
+            .target
+            .as_ref()
+            .ok_or_else(|| AppError::SurfaceInitializationError)
+    }
+    pub fn get_view(
+        frame: &wgpu::SurfaceTexture,
+        descriptor: Option<wgpu::TextureViewDescriptor>,
+    ) -> Result<wgpu::TextureView, AppError> {
+        Ok(frame
+            .texture
+            .create_view(&descriptor.unwrap_or(wgpu::TextureViewDescriptor::default())))
+    }
+
+    pub fn try_get_frame(surface: &SurfaceWrapper) -> Result<wgpu::SurfaceTexture, AppError> {
+        if let Ok(frame) = surface.current.get_current_texture() {
+            Ok(frame)
+        } else {
+            Err(AppError::FrameAcquisitionError)
+        }
     }
 }
 
 impl Rupy {
-    pub fn render_pass(&mut self) -> Result<(), AppError> {
-        if let Some(surface) = &self.surface {
-            let device = self
-                .device
-                .as_ref()
-                .ok_or(AppError::InstanceInitializationError)?;
-            let queue = self
-                .queue
-                .as_ref()
-                .ok_or(AppError::InstanceInitializationError)?;
+    pub fn update(&mut self) -> Result<(), AppError> {
+        self.time.update();
 
-            let frame = surface
-                .current
-                .get_current_texture()
-                .map_err(|e| AppError::SurfaceError(e))?;
-            let view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
+        if self.debug_mode != DebugMode::None {
+            if let (Some(glyphon), Some(size)) = (&mut self.glyphon, self.window.size()) {
+                let resolution = Resolution {
+                    width: size.width,
+                    height: size.height,
+                };
+                let bounds = get_text_bounds(resolution, Some(150), Some(440));
+                Self::prepare_text(
+                    self.device.as_ref().ok_or(AppError::NoDeviceError(
+                        "Failed to prepare text, no device set!".into(),
+                    ))?,
+                    self.queue.as_ref().ok_or(AppError::NoQueueError(
+                        "Failed to prepare text, no queue set!".into(),
+                    ))?,
+                    ("PRISMA").to_string(),
+                    resolution,
+                    bounds,
+                    glyphon,
+                    self.window.scale_factor(),
+                );
+            };
+        }
+        Ok(())
+    }
+    pub fn render(&mut self) -> Result<(), AppError> {
+        self.ensure_device()?;
+        self.ensure_queue()?;
 
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let device = self.device.as_ref().unwrap();
+        let queue = self.queue.as_ref().unwrap();
+        let surface = self.try_get_surface()?;
+        let frame = Self::try_get_frame(surface)?;
+        let view = Self::get_view(&frame, Some(wgpu::TextureViewDescriptor::default()))?;
+        let scale = 0.8;
 
-            let render_pass_descriptor = wgpu::RenderPassDescriptor {
+        let magenta_triangle_vertices = [
+            Vertex {
+                position: [0.0 * scale, 0.5 * scale, 0.0],
+                color: [1.0, 0.0, 0.5, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [-0.5 * scale, 0.0 * scale, 0.0],
+                color: [1.0, 0.0, 0.5, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [0.5 * scale, 0.0 * scale, 0.0],
+                color: [1.0, 0.0, 0.5, 1.0],
+                uv: [0.0, 0.0],
+            },
+        ];
+
+        let orange_triangle_vertices = [
+            Vertex {
+                position: [-0.5 * scale, 0.0 * scale, 0.0],
+                color: [1.0, 0.5, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [-1.0 * scale, -0.5 * scale, 0.0],
+                color: [1.0, 0.5, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0 * scale, -0.5 * scale, 0.0],
+                color: [1.0, 0.5, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+        ];
+
+        let yellow_triangle_vertices = [
+            Vertex {
+                position: [0.5 * scale, 0.0 * scale, 0.0],
+                color: [1.0, 1.0, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0 * scale, -0.5 * scale, 0.0],
+                color: [1.0, 1.0, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+            Vertex {
+                position: [1.0 * scale, -0.5 * scale, 0.0],
+                color: [1.0, 1.0, 0.0, 1.0],
+                uv: [0.0, 0.0],
+            },
+        ];
+        let magenta_mesh = Mesh::new(device, &magenta_triangle_vertices, &[0, 1, 2]);
+        let orange_mesh = Mesh::new(device, &orange_triangle_vertices, &[0, 1, 2]);
+        let yellow_mesh = Mesh::new(device, &yellow_triangle_vertices, &[0, 1, 2]);
+
+        let camera_uniforms = CameraUniforms::default();
+        let model_uniform_buffer = Arc::new(device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Global Uniform Buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniforms]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            },
+        ));
+
+        self.shaded_material = Some(ShadedMaterial::new(device, model_uniform_buffer, None)?);
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Main Render Encoder"),
+        });
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Main Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
+                            r: 0.0,
+                            g: 0.5,
                             b: 0.3,
                             a: 1.0,
                         }),
@@ -154,61 +244,44 @@ impl Rupy {
                     },
                 })],
                 depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            };
-            {
-                let mut render_pass = encoder.begin_render_pass(&render_pass_descriptor);
+                timestamp_writes: Default::default(),
+                occlusion_query_set: Default::default(),
+            });
+            self.render_debug_info(&mut render_pass);
+            if let Some(material) = &self.shaded_material {
+                render_pass.set_pipeline(&material.pipeline);
+                render_pass.set_bind_group(0, material.bind_group(), &[]);
 
-                if let Some(glyphon) = &self.glyphon {
-                    glyphon.render(&mut render_pass)?;
-                }
+                render_pass.set_vertex_buffer(0, magenta_mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(magenta_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                render_pass.draw_indexed(0..magenta_mesh.index_count(), 0, 0..1);
+
+                render_pass.set_vertex_buffer(0, orange_mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(orange_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                render_pass.draw_indexed(0..orange_mesh.index_count(), 0, 0..1);
+
+                render_pass.set_vertex_buffer(0, yellow_mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(yellow_mesh.index_buffer.slice(..), IndexFormat::Uint16);
+                render_pass.draw_indexed(0..yellow_mesh.index_count(), 0, 0..1);
             }
-
-            queue.submit(Some(encoder.finish()));
-
-            frame.present();
         }
+
+        queue.submit(Some(encoder.finish()));
+        frame.present();
         Ok(())
     }
 
-    pub fn update(&mut self) -> Result<(), AppError> {
-        self.time.update();
-
-        if let Some(glyphon) = &mut self.glyphon {
-            let device = self
-                .device
-                .as_ref()
-                .ok_or(AppError::InstanceInitializationError)?;
-            let queue = self
-                .queue
-                .as_ref()
-                .ok_or(AppError::InstanceInitializationError)?;
-
-            let text = format!("{:#?}", self.time.debug(),);
-
-            let inner_size = self.window.size();
-            let text_bounds = get_text_bounds(
-                inner_size.width as i32,
-                inner_size.height as i32,
-                Some(10),
-                Some(10),
-            );
-
-            Self::prepare_text(
-                device,
-                queue,
-                text,
-                Resolution {
-                    width: inner_size.width,
-                    height: inner_size.height,
-                },
-                text_bounds,
-                glyphon,
-            );
+    fn render_debug_info<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+        if self.debug_mode == DebugMode::None {
+            return;
+        } else if let Some(glyphon) = &self.glyphon {
+            if let Err(e) = glyphon.render(render_pass) {
+                log_error!("Failed to render debug info: {:?}", e);
+            }
         }
-
-        Ok(())
     }
 
     pub(crate) fn prepare_text(
@@ -218,11 +291,14 @@ impl Rupy {
         resolution: Resolution,
         bounds: TextBounds,
         glyphon: &mut GlyphonRender,
+        scale_factor: f64,
     ) {
         glyphon.reconfigure(queue, resolution);
         glyphon.set_buffer_size((resolution.width as f32, resolution.height as f32));
         glyphon.set_buffer_text(&text);
-        glyphon.prepare_text(&device, &queue, bounds).ok();
+        glyphon
+            .prepare_text(&device, &queue, bounds, scale_factor as f32)
+            .ok();
         glyphon.shape_until_scroll(false);
     }
 }

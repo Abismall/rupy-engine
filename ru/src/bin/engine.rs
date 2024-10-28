@@ -3,21 +3,22 @@ use std::sync::Arc;
 use crossbeam::channel::{self, Receiver, Sender};
 
 use rupy::{
+    camera::Camera,
     core::{error::AppError, time::Time},
     events::{
         proxy::{EventBusProxy, EventProxy},
         RupyAppEvent,
     },
-    log_error,
-    model::window::WindowWrapper,
+    input::manager::InputManager,
+    math::mat4_id,
     prelude::{
-        resources::ResourceManager,
+        perspective::{CameraPerspective, CameraPreset},
         rupy::Rupy,
-        state::AppState,
+        state::ApplicationStateFlags,
+        window::WindowWrapper,
         worker::{RupyTaskWorker, RupyWorkerTask},
     },
     rupyLogger::factory::LogFactory,
-    system::{camera::Camera, input::manager::InputManager},
     traits::bus::EventProxyTrait,
 };
 use winit::event_loop::EventLoop;
@@ -51,28 +52,39 @@ async fn main() -> Result<(), AppError> {
 
     let camera = Camera::new(
         Some([0.0, 0.0, 5.0]),
-        rupy::system::camera::ProjectionType::Perspective,
+        rupy::camera::ProjectionType::Perspective,
     );
     let input = InputManager::new(input_tx, camera);
     let window = WindowWrapper::new();
 
     let time = Time::new();
     let mut rupy = Rupy {
-        state: AppState::empty(),
-        resources: ResourceManager::new(),
+        state: ApplicationStateFlags::empty(),
         #[cfg(feature = "logging")]
         logger: LogFactory::default(),
+        debug_mode: rupy::prelude::DebugMode::None,
+        camera: Camera::new(None, rupy::camera::ProjectionType::Orthographic),
+        camera_perspective: CameraPerspective::from_preset(CameraPreset::Standard),
         event_proxy,
         input,
         event_tx: arc_tx,
         task_tx,
         window,
         time,
+        model_matrix: mat4_id(),
+        view_matrix: mat4_id(),
+        projection_matrix: mat4_id(),
+        shaded_material: None,
+        textured_material: None,
+        sampler: None,
+
+        model_uniform: None,
+        global_uniform: None,
+        menu: None,
+        adapter: None,
         device: None,
         queue: None,
-        renderer: None,
         glyphon: None,
-        surface: None,
     };
 
     tokio::spawn(async move {

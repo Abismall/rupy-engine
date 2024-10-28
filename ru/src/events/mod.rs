@@ -1,30 +1,27 @@
 pub mod proxy;
-use winit::{
-    event::{Modifiers, MouseButton},
-    window::WindowAttributes,
-};
+use winit::event::{Modifiers, MouseButton};
 
-use crate::graphics::texture::texture_cache::RupyTextureFileVec;
+use crate::graphics::texture::TextureAttachment;
 
 #[derive(Clone, Debug)]
 
 pub enum RupyAppEvent {
     Shutdown(u32),
-    TextureCacheSetupCompleted(RupyTextureFileVec),
-    TextureCacheSetupFailed(String),
+    ListShaderFilesTaskCompleted(Vec<String>),
+    LoadTextureTaskCompleted(Vec<TextureAttachment>),
     Initialized,
     ToggleConsole,
     ToggleDebugMode,
     ToggleLaunchMenu,
-    CreateSurface(u32, u32),
-    CreateWindow(WindowAttributes, String, f32, f32),
+    CreateSurface,
+    CreateWindow,
     ToggleAudio,
     AudioMuteOn,
     AudioMuteOff,
     VolumeUp,
     VolumeDown,
 
-    CloseRequested,
+    ExitRequest,
     KeyPressed {
         key_code: u32,
         modifiers: Modifiers, // Control, Shift, Alt, etc.

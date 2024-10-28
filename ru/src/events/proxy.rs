@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crossbeam::channel::Receiver;
 use winit::event_loop::EventLoopProxy;
 
-use crate::{log_info, log_warning, traits::bus::EventProxyTrait};
+use crate::{log_warning, traits::bus::EventProxyTrait};
 
 pub struct EventProxy<T: 'static + std::fmt::Debug> {
     event_loop_proxy: Arc<EventLoopProxy<T>>,

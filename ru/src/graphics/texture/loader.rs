@@ -1,68 +1,150 @@
-use super::{create_extent_3d, create_texture, RupyTextureFile};
-use crate::core::{error::AppError, files::FileSystem};
-use crate::log_debug;
+use image::GenericImageView;
+use wgpu::{Extent3d, TextureDimension, TextureFormat, TextureUsages};
 
+use super::{create_texture, TextureAttachment};
+use crate::core::{error::AppError, files::FileSystem};
+
+pub fn read_image_format(image: image::DynamicImage) -> Result<TextureFormat, AppError> {
+    Ok(match image.color() {
+        image::ColorType::Rgb8 => TextureFormat::Rgba8UnormSrgb,
+        image::ColorType::Rgba8 => TextureFormat::Rgba8UnormSrgb,
+        image::ColorType::L8 => TextureFormat::R8Unorm,
+        other_format => {
+            return Err(AppError::UnsupportedImageFormat(format!(
+                "{:?}",
+                other_format
+            )))
+        }
+    })
+}
 pub fn load_texture_files(
     folder_path: &str,
     extension: &str,
-) -> Result<Vec<RupyTextureFile>, AppError> {
+    dimension: TextureDimension,
+    mip_level_count: u32,
+    sample_count: u32,
+) -> Result<Vec<TextureAttachment>, AppError> {
     let mut entries = Vec::new();
     for entry in
         FileSystem::list_files_with_extension(folder_path, std::ffi::OsStr::new(extension))?
     {
-        log_debug!("Processing: {:?}", entry);
         let path = entry.as_path();
         let file_path = path.to_string_lossy().to_string();
-        entries.push(RupyTextureFile {
+
+        let image = image::open(&path)?;
+        let (width, height) = image.dimensions();
+
+        let format = match image.color() {
+            image::ColorType::Rgb8 => TextureFormat::Rgba8UnormSrgb,
+            image::ColorType::Rgba8 => TextureFormat::Rgba8UnormSrgb,
+            image::ColorType::L8 => TextureFormat::R8Unorm,
+            _format => return Err(AppError::UnsupportedImageFormat(format!("{:?}", _format))),
+        };
+
+        entries.push(TextureAttachment {
             file_path,
-            dimension: wgpu::TextureDimension::D3,
-            mip_level_count: 1,
-            sample_count: 1,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
+            dimension,
+            mip_level_count,
+            sample_count,
+            format,
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
         });
     }
     Ok(entries)
 }
+
 pub fn load_texture_file(
     device: &wgpu::Device,
     path: &str,
     dimension: wgpu::TextureDimension,
+    usage: TextureUsages,
     mip_level_count: u32,
     sample_count: u32,
-    format: wgpu::TextureFormat,
 ) -> Result<(wgpu::Texture, image::ImageBuffer<image::Rgba<u8>, Vec<u8>>), AppError> {
     let img = FileSystem::load_image_file(path)?;
     let rgba = img.to_rgba8();
-    let size = create_extent_3d(img, Some(1));
-
+    let (width, height) = img.dimensions();
+    let format = read_image_format(img)?;
     let texture = create_texture(
         device,
-        Some(path.to_string()),
+        path.into(),
         dimension,
+        usage,
+        Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
         format,
-        size,
         mip_level_count,
         sample_count,
     );
     Ok((texture, rgba))
 }
 
-pub fn texture_file_cache_setup(
+pub fn load_textures_from_dir(
     folder_path: String,
     extension: String,
-) -> Result<Vec<RupyTextureFile>, AppError> {
+    dimension: TextureDimension,
+    mip_level_count: u32,
+    sample_count: u32,
+) -> Result<Vec<TextureAttachment>, AppError> {
     Ok(load_texture_files(
         &FileSystem::append_to_cargo_dir(&folder_path),
         &extension,
+        dimension,
+        mip_level_count,
+        sample_count,
     )?)
 }
-/// Async function to perform the texture file cache setup
-pub async fn texture_file_cache_setup_task(
+
+pub async fn async_load_textures_from_dir(
     folder_path: String,
     extension: String,
-) -> Result<Vec<RupyTextureFile>, AppError> {
-    // Call the synchronous texture_file_cache_setup function in an async context
-    tokio::task::spawn_blocking(|| texture_file_cache_setup(folder_path, extension))
-        .await
-        .map_err(|e| AppError::TaskJoinError(e))?
+    dimension: TextureDimension,
+    mip_level_count: u32,
+    sample_count: u32,
+) -> Result<Vec<TextureAttachment>, AppError> {
+    tokio::task::spawn_blocking(move || {
+        load_textures_from_dir(
+            folder_path,
+            extension,
+            dimension,
+            mip_level_count,
+            sample_count,
+        )
+    })
+    .await
+    .map_err(|e| AppError::TaskJoinError(e))?
+}
+
+pub fn texture_write(
+    texture: &wgpu::Texture,
+    origin: wgpu::Origin3d,
+    aspect: wgpu::TextureAspect,
+    rgba: &image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    size: wgpu::Extent3d,
+    mip_level: u32,
+    queue: &wgpu::Queue,
+) {
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            texture: &texture,
+            mip_level,
+            origin,
+            aspect,
+        },
+        &rgba,
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * size.width),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
 }

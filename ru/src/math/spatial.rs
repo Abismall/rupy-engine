@@ -28,9 +28,8 @@ pub fn mat4_mul_vec4(mat: Mat4, vec: [f32; 4]) -> [f32; 4] {
 }
 pub fn mat4_inverse(mat: Mat4) -> Mat4 {
     let mut inv = [[0.0; 4]; 4];
-    let mut det = 0.0;
+    let mut _det = 0.0;
 
-    // Compute the inverse of the 4x4 matrix using cofactor method.
     inv[0][0] = mat[1][1] * mat[2][2] * mat[3][3]
         - mat[1][1] * mat[2][3] * mat[3][2]
         - mat[2][1] * mat[1][2] * mat[3][3]
@@ -143,20 +142,20 @@ pub fn mat4_inverse(mat: Mat4) -> Mat4 {
         + mat[2][0] * mat[0][1] * mat[1][2]
         - mat[2][0] * mat[0][2] * mat[1][1];
 
-    det = mat[0][0] * inv[0][0]
+    _det = mat[0][0] * inv[0][0]
         + mat[0][1] * inv[1][0]
         + mat[0][2] * inv[2][0]
         + mat[0][3] * inv[3][0];
 
-    if det == 0.0 {
+    if _det == 0.0 {
         panic!("Matrix is not invertible");
     }
 
-    det = 1.0 / det;
+    _det = 1.0 / _det;
 
     for i in 0..4 {
         for j in 0..4 {
-            inv[i][j] *= det;
+            inv[i][j] *= _det;
         }
     }
 
@@ -183,14 +182,12 @@ pub fn mat3_to_mat4(mat3: [[f32; 3]; 3], translation: Option<Vec3>) -> Mat4 {
         [zero, zero, zero, one],
     ];
 
-    // Copy the Mat3 elements into the top-left of Mat4
     for i in 0..3 {
         for j in 0..3 {
             mat4[i][j] = mat3[i][j];
         }
     }
 
-    // Set the translation components if provided
     if let Some(t) = translation {
         mat4[0][3] = t[0];
         mat4[1][3] = t[1];

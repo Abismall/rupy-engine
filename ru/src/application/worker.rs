@@ -1,11 +1,16 @@
-use crate::events::RupyAppEvent;
-use crate::graphics::texture::loader::texture_file_cache_setup_task;
-use crate::log_info;
+use crate::{
+    events::RupyAppEvent,
+    graphics::{
+        shader::library::try_list_shader_file_paths, texture::loader::async_load_textures_from_dir,
+    },
+    log_warning,
+};
 use crossbeam::channel::{Receiver, Sender};
 
 #[derive(Debug)]
 pub enum RupyWorkerTask {
-    TextureFileCacheSetup(String, String),
+    LoadTextures(String, String, wgpu::TextureDimension, u32, u32),
+    ListShaderFiles,
 }
 
 pub struct RupyTaskWorker {
@@ -14,28 +19,51 @@ pub struct RupyTaskWorker {
 
 impl RupyTaskWorker {
     pub fn spawn(task_receiver: Receiver<RupyWorkerTask>, result_sender: Sender<RupyAppEvent>) {
+        let result_tx = result_sender.clone();
         tokio::spawn(async move {
             while let Ok(task) = task_receiver.recv() {
-                log_info!("{:?}", task);
                 match task {
-                    RupyWorkerTask::TextureFileCacheSetup(path, extension) => {
-                        let result_tx = result_sender.clone();
-                        match texture_file_cache_setup_task(path, extension).await {
-                            Ok(textures) => {
-                                result_tx
-                                    .send(RupyAppEvent::TextureCacheSetupCompleted(textures))
-                                    .unwrap();
-                            }
-                            Err(e) => {
-                                result_tx
-                                    .send(RupyAppEvent::TextureCacheSetupFailed(format!(
-                                        "Failed to set up texture cache: {}",
-                                        e
-                                    )))
-                                    .unwrap();
+                    RupyWorkerTask::LoadTextures(
+                        path,
+                        extension,
+                        dimension,
+                        mip_level_count,
+                        sample_count,
+                    ) => match async_load_textures_from_dir(
+                        path,
+                        extension,
+                        dimension,
+                        mip_level_count,
+                        sample_count,
+                    )
+                    .await
+                    {
+                        Ok(data) => {
+                            if let Err(e) =
+                                result_tx.send(RupyAppEvent::LoadTextureTaskCompleted(data))
+                            {
+                                log_warning!(
+                                    "Failed to send LoadTextureFilesComplete event: {:?}",
+                                    e
+                                );
                             }
                         }
-                    }
+                        Err(e) => {
+                            log_warning!("Warning: async_load_textures_from_dir failed: {:?}", e);
+                        }
+                    },
+                    RupyWorkerTask::ListShaderFiles => match try_list_shader_file_paths() {
+                        Ok(data) => {
+                            if let Err(e) =
+                                result_tx.send(RupyAppEvent::ListShaderFilesTaskCompleted(data))
+                            {
+                                log_warning!("Warning: Failed to send shader files event: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            log_warning!("Warning: try_list_shader_file_paths failed: {:?}", e);
+                        }
+                    },
                 }
             }
         });

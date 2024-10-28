@@ -4,8 +4,8 @@ use quaternion::Quaternion;
 use vecmath::vec3_mul;
 use vecmath::{
     col_mat4_mul, mat4_id, vec2_add, vec2_dot, vec2_normalized, vec2_scale, vec2_sub, vec3_add,
-    vec3_cast, vec3_cross, vec3_dot, vec3_normalized, vec3_scale, vec3_sub, vec4_add, vec4_dot,
-    vec4_mul, vec4_normalized, vec4_scale, vec4_sub, Vector2, Vector3, Vector4,
+    vec3_cross, vec3_dot, vec3_normalized, vec3_scale, vec3_sub, vec4_add, vec4_dot, vec4_mul,
+    vec4_normalized, vec4_scale, vec4_sub, Vector2, Vector3, Vector4,
 };
 
 pub const VEC2_ZERO: Vec2 = [0.0, 0.0];

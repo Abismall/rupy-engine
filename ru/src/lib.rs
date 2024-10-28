@@ -1,13 +1,15 @@
 pub mod application;
+pub mod camera;
 pub mod core;
 pub mod events;
 pub mod graphics;
+pub mod input;
 pub mod math;
-pub mod model;
 pub mod scene;
-pub mod system;
 pub mod traits;
+pub mod ui;
 pub mod utilities;
+
 #[cfg(feature = "logging")]
 pub use core::logging as rupyLogger;
 
@@ -63,12 +65,13 @@ macro_rules! log_warning {
 
 pub mod prelude {
     pub use crate::application::*;
+    pub use crate::camera::*;
     pub use crate::core::*;
-    pub use crate::graphics::texture::texture_cache::TextureCache;
+    pub use crate::events::*;
+    pub use crate::input::*;
     pub use crate::math::*;
-    pub use crate::model::*;
-    pub use crate::system::camera::frustum::*;
-    pub use crate::system::camera::perspective::*;
-    pub use crate::system::*;
+    pub use crate::scene::*;
     pub use crate::traits::*;
+    pub use crate::ui::*;
+    pub use crate::utilities::*;
 }

@@ -2,6 +2,7 @@ pub enum SamplerType {
     Linear,
     Nearest,
     Default,
+    Textured,
 }
 
 pub fn setup_sampler(
@@ -84,5 +85,14 @@ pub fn create_sampler_from_type(device: &wgpu::Device, sampler_type: SamplerType
             None,
             None,
         ),
+        SamplerType::Textured => device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        }),
     }
 }

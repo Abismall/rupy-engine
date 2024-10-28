@@ -3,10 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use crate::{
     log_debug,
     scene::{
-        components::{
-            traits::{Component, ComponentStorage},
-            ComponentVec,
-        },
+        components::{Component, ComponentStorage, ComponentVec},
         entities::models::Entity,
     },
 };
@@ -92,18 +89,10 @@ impl World {
         &self,
         mut f: impl FnMut(Entity, &T, &U, &M, &R),
     ) {
-        log_debug!("Query4 initiated.");
-
         let storage_t = self.components.get(&TypeId::of::<T>());
         let storage_u = self.components.get(&TypeId::of::<U>());
         let storage_m = self.components.get(&TypeId::of::<M>());
         let storage_r = self.components.get(&TypeId::of::<R>());
-
-        log_debug!("Query4 component presence:");
-        log_debug!("T present: {:?}", storage_t.is_some());
-        log_debug!("U present: {:?}", storage_u.is_some());
-        log_debug!("M present: {:?}", storage_m.is_some());
-        log_debug!("R present: {:?}", storage_r.is_some());
 
         if let (Some(storage_t), Some(storage_u), Some(storage_m), Some(storage_r)) =
             (storage_t, storage_u, storage_m, storage_r)
@@ -140,8 +129,6 @@ impl World {
                 }
             };
 
-            log_debug!("All ComponentVecs successfully downcasted.");
-
             let data_t = match component_vec_t.data.read() {
                 Ok(data) => data,
                 Err(e) => {
@@ -174,16 +161,10 @@ impl World {
                 }
             };
 
-            log_debug!("All component data successfully locked.");
-
             for (&entity, component_t) in data_t.iter() {
-                log_debug!("Processing entity: {}", entity);
                 if let Some(component_u) = data_u.get(&entity) {
-                    log_debug!("Processing entity step 1");
                     if let Some(component_m) = data_m.get(&entity) {
-                        log_debug!("Processing entity step 2");
                         if let Some(component_r) = data_r.get(&entity) {
-                            log_debug!("Processing entity step 3");
                             f(entity, component_t, component_u, component_m, component_r);
                         } else {
                             log_debug!("Entity {} is missing component R", entity);

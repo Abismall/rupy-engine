@@ -1,3 +1,4 @@
+pub mod fun;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 

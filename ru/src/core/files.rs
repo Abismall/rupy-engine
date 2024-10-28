@@ -7,25 +7,21 @@ use std::{ffi::OsStr, io::Write};
 use crate::log_error;
 
 use super::error::AppError;
-/// A builder-like struct for chaining `push` operations on a `PathBuf`.
 #[derive(Debug, Clone)]
 pub struct PathBuilder {
     pub path: PathBuf,
 }
 
 impl PathBuilder {
-    /// Creates a new `PathBuilder` with the given base path.
     pub fn new(base: PathBuf) -> Self {
         Self { path: base }
     }
 
-    /// Pushes a new component onto the path.
     pub fn push<T: AsRef<Path>>(mut self, component: T) -> Self {
         self.path.push(component);
         self
     }
 
-    /// Finalizes the builder and returns the constructed `PathBuf`.
     pub fn build(self) -> String {
         self.path.display().to_string()
     }
@@ -39,7 +35,29 @@ impl FileSystem {
     pub fn cargo_manifest_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
+    /// Recursively searches within the Cargo manifest directory for a directory with the specified name.
+    /// Returns the path if the directory is found; otherwise, returns None.
+    pub fn find_from_project_dir(dir_name: &str) -> Option<PathBuf> {
+        let manifest_dir = FileSystem::cargo_manifest_dir();
+        Self::find_directory_recursive(&manifest_dir, dir_name)
+    }
 
+    fn find_directory_recursive(path: &Path, dir_name: &str) -> Option<PathBuf> {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() {
+                    if entry_path.file_name().and_then(|name| name.to_str()) == Some(dir_name) {
+                        return Some(entry_path);
+                    }
+                    if let Some(found) = Self::find_directory_recursive(&entry_path, dir_name) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
     pub fn resolve_static_path(path: &str) -> Result<PathBuf, AppError> {
         let resolved_path = fs::canonicalize(PathBuf::from(path))?;
         Ok(resolved_path)

@@ -10,17 +10,24 @@ use winit::raw_window_handle::HandleError;
 use crate::events::RupyAppEvent;
 use crate::prelude::worker::RupyWorkerTask;
 
-/// Application-wide errors that encompass various subsystems such as IO, rendering, and GPU initialization.
 #[derive(Debug, Error)]
 pub enum AppError {
     // ====== General Errors ======
+    #[error("Failed to parse shader source: {0}")]
+    ShaderParseError(#[from] naga::front::wgsl::ParseError),
+
     #[error("Failed to acquire lock: {0}")]
     LockError(String),
     #[error("Failed to execute task.")]
     TaskJoinError(#[from] tokio::task::JoinError),
     #[error("Channel error: {0}")]
     ChannelError(String),
-
+    #[error("Failed to load texture file: {0}")]
+    TextureFileLoadError(String),
+    #[error("Surface was lost or has not been initialized")]
+    SurfaceInitializationError,
+    #[error("Failed to acquire current frame")]
+    FrameAcquisitionError,
     #[error("File not found: {0}")]
     FileNotFoundError(String),
 
@@ -33,10 +40,16 @@ pub enum AppError {
     // ====== Texture and Resources Errors ======
     #[error("No texture provided.")]
     MissingTexture,
-
+    // ====== Texture and Resources Errors ======
+    #[error("Image format is not supported: {0}")]
+    UnsupportedImageFormat(String),
     #[error("No sampler provided.")]
     MissingSampler,
 
+    #[error("Bind group layout error: {0}")]
+    BindGroupLayoutError(String),
+    #[error("Bind group layout error: {0}")]
+    BindGroupLayoutCacheError(String),
     #[error("Unknown shader resource source type: {0}")]
     UnknownShaderResourceTypeError(String),
 

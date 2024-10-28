@@ -46,13 +46,12 @@ pub async fn initialize_gpu_resources_cache() -> Result<(), AppError> {
                 required_features: wgpu::Features::POLYGON_MODE_LINE
                     | wgpu::Features::POLYGON_MODE_POINT,
                 required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::default(),
+                memory_hints: wgpu::MemoryHints::Performance,
             },
             None,
         )
         .await
         .map_err(|e| AppError::DeviceCreationError(e.to_string()))?;
-
     let mut device_cache = GLOBAL_GPU_DEVICE_CACHE
         .write()
         .map_err(|_| AppError::LockAcquisitionError)?;

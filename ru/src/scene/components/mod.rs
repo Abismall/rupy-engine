@@ -1,15 +1,23 @@
-pub mod material;
 pub mod mesh;
-pub mod resources;
-pub mod traits;
-pub mod transform;
+
 pub mod uniform;
 pub mod vertex;
 use std::{any::Any, collections::HashMap, sync::RwLock};
 
-use traits::{Component, ComponentStorage};
+use wgpu::{util::DeviceExt, Buffer, Device};
+
+use crate::traits::buffers::IndexBuffer;
 
 use super::entities::models::Entity;
+pub trait Component: Any + Send + Sync {}
+
+impl<T: Any + Send + Sync> Component for T {}
+
+pub trait ComponentStorage {
+    fn remove(&self, entity: Entity);
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 pub struct ComponentVec<T: Component> {
     pub data: RwLock<HashMap<Entity, T>>,
@@ -52,5 +60,16 @@ impl<T: Component> ComponentStorage for ComponentVec<T> {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+impl IndexBuffer for u16 {
+    type IndexType = u16;
+
+    fn create_index_buffer(device: &Device, indices: &[Self], usage: wgpu::BufferUsages) -> Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(indices),
+            usage: wgpu::BufferUsages::INDEX | usage,
+        })
     }
 }

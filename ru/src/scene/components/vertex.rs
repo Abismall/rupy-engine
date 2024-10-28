@@ -1,37 +1,44 @@
-use crate::math::{Vec2, Vec3, Vec4};
 use bytemuck::{Pod, Zeroable};
+use wgpu::{Buffer, Device, VertexBufferLayout};
+
+use crate::traits::buffers::VertexBuffer;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Vertex {
-    pub position: Vec3,
-    pub color: Vec4,
-    pub uv: Vec2,
+    pub position: [f32; 3],
+    pub color: [f32; 4],
+    pub uv: [f32; 2],
 }
 
 impl Vertex {
-    pub fn vertex_buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a> {
-        use std::mem;
+    pub fn create_buffer(device: &Device, vertices: &[Self]) -> Buffer {
+        Self::create_static_vertex_buffer(device, vertices)
+    }
+
+    pub fn layout<'a>() -> VertexBufferLayout<'a> {
+        Vertex::vertex_buffer_layout()
+    }
+}
+
+impl VertexBuffer for Vertex {
+    fn vertex_buffer_layout<'a>() -> VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
-                // Position
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 0,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-                // Color
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<Vec3>() as wgpu::BufferAddress,
+                    offset: 12,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-                // UV
                 wgpu::VertexAttribute {
-                    offset: (mem::size_of::<Vec3>() + mem::size_of::<Vec4>())
-                        as wgpu::BufferAddress,
+                    offset: 28,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x2,
                 },
