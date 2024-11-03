@@ -93,7 +93,6 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                 context.camera.on_mouse_motion((delta_x, delta_y));
 
                 context.last_mouse_position = position;
-                context.render_surface.window.request_redraw();
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let is_pressed = event.state.is_pressed();
@@ -113,7 +112,6 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                         context
                             .camera
                             .on_key_event(&event, context.frame.delta_time);
-                        context.render_surface.window.request_redraw();
                     }
                     _ => {}
                 }

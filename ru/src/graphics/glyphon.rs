@@ -106,105 +106,103 @@ impl GlyphonManager {
         surface_config: &SurfaceConfiguration,
         debug: &DebugMode,
     ) {
-        if *debug != DebugMode::None {
-            self.viewport.update(
-                queue,
-                Resolution {
-                    width: surface_config.width,
-                    height: surface_config.height,
-                },
-            );
+        self.viewport.update(
+            queue,
+            Resolution {
+                width: surface_config.width,
+                height: surface_config.height,
+            },
+        );
 
-            // Use appropriate renderer based on `use_depth`
-            let _ = if self.use_depth {
-                &self
-                    .renderer_3d
-                    .prepare(
-                        device,
-                        queue,
-                        &mut self.font_system,
-                        &mut self.atlas,
-                        &self.viewport,
-                        [TextArea {
-                            buffer: &self.glyphon_buffer,
-                            left: 10.0,
-                            top: 10.0,
-                            scale: 1.0,
-                            bounds: TextBounds {
-                                left: 0,
-                                top: 0,
-                                right: surface_config.width as i32,
-                                bottom: surface_config.height as i32,
-                            },
-                            default_color: glyphon::Color::rgb(255, 255, 255),
-                            custom_glyphs: &[],
-                        }],
-                        &mut self.swash_cache,
-                    )
-                    .expect("Failed to prepare text rendering")
-            } else {
-                &self
-                    .renderer_2d
-                    .prepare(
-                        device,
-                        queue,
-                        &mut self.font_system,
-                        &mut self.atlas,
-                        &self.viewport,
-                        [TextArea {
-                            buffer: &self.glyphon_buffer,
-                            left: 10.0,
-                            top: 10.0,
-                            scale: 1.0,
-                            bounds: TextBounds {
-                                left: 0,
-                                top: 0,
-                                right: surface_config.width as i32,
-                                bottom: surface_config.height as i32,
-                            },
-                            default_color: glyphon::Color::rgb(255, 255, 255),
-                            custom_glyphs: &[],
-                        }],
-                        &mut self.swash_cache,
-                    )
-                    .expect("Failed to prepare text rendering")
-            };
-
-            let depth_stencil = if self.use_depth {
-                depth_stencil_attachment
-            } else {
-                return;
-            };
-
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Glyphon Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
+        // Use appropriate renderer based on `use_depth`
+        let _ = if self.use_depth {
+            &self
+                .renderer_3d
+                .prepare(
+                    device,
+                    queue,
+                    &mut self.font_system,
+                    &mut self.atlas,
+                    &self.viewport,
+                    [TextArea {
+                        buffer: &self.glyphon_buffer,
+                        left: 10.0,
+                        top: 10.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: surface_config.width as i32,
+                            bottom: surface_config.height as i32,
                         },
-                    })],
-                    depth_stencil_attachment: depth_stencil.cloned(),
-                    timestamp_writes: Default::default(),
-                    occlusion_query_set: Default::default(),
-                });
+                        default_color: glyphon::Color::rgb(255, 255, 255),
+                        custom_glyphs: &[],
+                    }],
+                    &mut self.swash_cache,
+                )
+                .expect("Failed to prepare text rendering")
+        } else {
+            &self
+                .renderer_2d
+                .prepare(
+                    device,
+                    queue,
+                    &mut self.font_system,
+                    &mut self.atlas,
+                    &self.viewport,
+                    [TextArea {
+                        buffer: &self.glyphon_buffer,
+                        left: 10.0,
+                        top: 10.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: surface_config.width as i32,
+                            bottom: surface_config.height as i32,
+                        },
+                        default_color: glyphon::Color::rgb(255, 255, 255),
+                        custom_glyphs: &[],
+                    }],
+                    &mut self.swash_cache,
+                )
+                .expect("Failed to prepare text rendering")
+        };
 
-                if self.use_depth {
-                    self.renderer_3d
-                        .render(&self.atlas, &self.viewport, &mut pass)
-                        .expect("Failed to render text");
-                } else {
-                    self.renderer_2d
-                        .render(&self.atlas, &self.viewport, &mut pass)
-                        .expect("Failed to render text");
-                }
+        let depth_stencil = if self.use_depth {
+            depth_stencil_attachment
+        } else {
+            None
+        };
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Glyphon Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: depth_stencil.cloned(),
+                timestamp_writes: Default::default(),
+                occlusion_query_set: Default::default(),
+            });
+
+            if self.use_depth {
+                self.renderer_3d
+                    .render(&self.atlas, &self.viewport, &mut pass)
+                    .expect("Failed to render text");
+            } else {
+                self.renderer_2d
+                    .render(&self.atlas, &self.viewport, &mut pass)
+                    .expect("Failed to render text");
             }
-
-            self.atlas.trim();
         }
+
+        self.atlas.trim();
     }
 
     pub fn clear_buffer(&mut self) {

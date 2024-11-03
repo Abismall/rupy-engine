@@ -283,8 +283,6 @@ impl RenderContext {
             self.frame.fps,
             &self.camera,
         );
-        self.text_rendering_system
-            .draw_fps([20.0, 40.0], self.frame.fps);
     }
 
     pub fn set_render_mode(&mut self, render_mode: RenderMode) {
