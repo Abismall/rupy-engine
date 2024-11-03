@@ -1,13 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crossbeam::channel::Sender;
-
-use crate::events::RupyAppEvent;
-use crate::log_debug;
-
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum Action {
+    ToggleRenderMode,
     ToggleAudio,
     ToggleDebugMode,
     ToggleConsole,
@@ -20,20 +16,19 @@ pub enum Action {
     VolumeDown,
     Muted,
     Unmuted,
+    Run,
     Exit,
 }
 
 pub type ActionCallback = Arc<dyn Fn() + Send + Sync>;
 pub struct ActionDispatcher {
     callbacks: HashMap<Action, Vec<ActionCallback>>,
-    tx: Arc<Sender<RupyAppEvent>>,
 }
 
 impl ActionDispatcher {
-    pub fn new(tx: Arc<Sender<RupyAppEvent>>) -> Self {
+    pub fn new() -> Self {
         ActionDispatcher {
             callbacks: HashMap::new(),
-            tx,
         }
     }
 
@@ -52,26 +47,6 @@ impl ActionDispatcher {
             for callback in callbacks {
                 callback();
             }
-        }
-
-        match action {
-            Action::ToggleConsole => {
-                if let Err(e) = self.tx.send(RupyAppEvent::ToggleConsole) {
-                    log_debug!("Failed to send ToggleConsole event: {:?}", e);
-                }
-            }
-            Action::ToggleDebugMode => {
-                if let Err(e) = self.tx.send(RupyAppEvent::ToggleDebugMode) {
-                    log_debug!("Failed to send ToggleConsole event: {:?}", e);
-                }
-            }
-
-            Action::CloseRequested => {
-                if let Err(e) = self.tx.send(RupyAppEvent::ExitRequest) {
-                    log_debug!("Failed to send ToggleConsole event: {:?}", e);
-                }
-            }
-            _ => {}
         }
     }
 }

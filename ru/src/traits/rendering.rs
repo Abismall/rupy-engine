@@ -1,8 +1,13 @@
+use nalgebra::Matrix4;
+
 pub trait Renderable {
-    fn vertex_buffer_layout(&self) -> wgpu::VertexBufferLayout<'static>;
-    fn index_format(&self) -> wgpu::IndexFormat;
-    fn vertex_count(&self) -> u32;
-    fn index_count(&self) -> u32;
-    fn vertex_buffer(&self) -> &wgpu::Buffer;
-    fn index_buffer(&self) -> &wgpu::Buffer;
+    type VertexType;
+
+    fn update(&mut self);
+
+    fn model_matrix(&self) -> Matrix4<f32>;
+
+    fn vertices(&self) -> &[Self::VertexType];
+
+    fn indices(&self) -> &[u16];
 }

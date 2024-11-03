@@ -1,16 +1,10 @@
 pub mod spatial;
 pub mod trigonometry;
-pub mod vector;
+pub use nalgebra::*;
+pub const PI: f64 = std::f64::consts::PI;
+pub const FRAC_PI_2: f64 = std::f64::consts::FRAC_2_PI;
 
-pub use spatial::mat4_id;
-pub use spatial::mat4_mul;
-pub use spatial::{translate, Mat4, Point3};
 pub use trigonometry::{cos, degrees, radians, sin};
-pub use vector::{
-    add_vec2, add_vec3, add_vec4, cross_vec3, dot_vec2, dot_vec3, dot_vec4, normalize_vec2,
-    normalize_vec3, normalize_vec4, scale_vec2, scale_vec3, scale_vec4, subtract_vec2,
-    subtract_vec3, subtract_vec4, Vec2, Vec3, Vec4,
-};
 
 pub fn clamp(value: f32, min: f32, max: f32) -> f32 {
     if value < min {
@@ -29,4 +23,22 @@ pub fn pixel_to_ndc(x: f32, y: f32, window_width: f32, window_height: f32) -> [f
     let x_ndc = (x / window_width) * 2.0 - 1.0;
     let y_ndc = 1.0 - (y / window_height) * 2.0;
     [x_ndc, y_ndc]
+}
+/// Generates a translation matrix for 3D transformations.
+///
+/// # Parameters
+/// - `x`: Translation along the x-axis.
+/// - `y`: Translation along the y-axis.
+/// - `z`: Translation along the z-axis.
+///
+/// # Returns
+/// A 4x4 translation matrix.
+pub fn mat4_translation(x: f32, y: f32, z: f32) -> Matrix4<f32> {
+    [
+        [1.0, 0.0, 0.0, x],
+        [0.0, 1.0, 0.0, y],
+        [0.0, 0.0, 1.0, z],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    .into()
 }

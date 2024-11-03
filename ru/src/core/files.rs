@@ -35,8 +35,7 @@ impl FileSystem {
     pub fn cargo_manifest_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
-    /// Recursively searches within the Cargo manifest directory for a directory with the specified name.
-    /// Returns the path if the directory is found; otherwise, returns None.
+
     pub fn find_from_project_dir(dir_name: &str) -> Option<PathBuf> {
         let manifest_dir = FileSystem::cargo_manifest_dir();
         Self::find_directory_recursive(&manifest_dir, dir_name)

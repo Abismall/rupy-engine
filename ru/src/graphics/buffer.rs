@@ -1,73 +1,107 @@
-use crate::scene::components::{uniform::CameraUniforms, vertex::Vertex};
 use wgpu::util::DeviceExt;
+use wgpu::{Buffer, BufferUsages};
 
-pub const LABEL_CAMERA_UNIFORM_BUFFER: &str = "Camera Uniform Buffer";
-pub const LABEL_MODEL_UNIFORM_BUFFER: &str = "Model Uniform Buffer";
-pub const LABEL_VERTEX_BUFFER: &str = "Vertex Buffer";
-pub const LABEL_INDEX_BUFFER: &str = "Index Buffer";
+use crate::ecs::components::uniform::Uniforms;
+use crate::ecs::components::vertex::Vertex;
 
-pub fn camera_uniform_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    device.create_buffer(&BufferScribe::camera_uniform_descriptor(
-        std::mem::size_of::<CameraUniforms>() as wgpu::BufferAddress,
-    ))
-}
+pub const UNIFORM_BUFFER_LABEL: &str = "uniform_buffer";
+pub const VERTEX_BUFFER_LABEL: &str = "vertex_buffer";
+pub const INDEX_BUFFER_LABEL: &str = "index_buffer";
 
-pub fn model_uniform_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    device.create_buffer(&BufferScribe::model_uniform_descriptor(
-        std::mem::size_of::<CameraUniforms>() as wgpu::BufferAddress,
-    ))
-}
-pub fn vertex_buffer(device: &wgpu::Device, vertices: &[Vertex]) -> wgpu::Buffer {
-    device.create_buffer_init(&BufferScribe::vertex_descriptor(vertices))
-}
-pub fn index_buffer(device: &wgpu::Device, indices: &[u16]) -> wgpu::Buffer {
-    device.create_buffer_init(&BufferScribe::index_descriptor(indices))
-}
-
-pub struct BufferScribe;
-
-impl BufferScribe {
-    pub fn camera_uniform_descriptor<'a>(buffer_byte_size: u64) -> wgpu::BufferDescriptor<'a> {
-        wgpu::BufferDescriptor {
-            label: Some(LABEL_CAMERA_UNIFORM_BUFFER),
-            size: buffer_byte_size,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }
+pub trait UniformBuffer: bytemuck::Pod + bytemuck::Zeroable {
+    fn create_uniform_buffer(device: &wgpu::Device, data: &Uniforms) -> Buffer {
+        uniform_buffer(device, data)
     }
-    pub fn model_uniform_descriptor<'a>(buffer_byte_size: u64) -> wgpu::BufferDescriptor<'a> {
-        wgpu::BufferDescriptor {
-            label: Some(LABEL_MODEL_UNIFORM_BUFFER),
-            size: buffer_byte_size,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        }
+
+    fn create_static_uniform_buffer(device: &wgpu::Device, data: Uniforms) -> Buffer {
+        let binding = [data];
+        let desc = uniform_descriptor(&binding);
+        init_buffer(device, desc)
     }
-    pub fn vertex_descriptor<'a>(vertices: &'a [Vertex]) -> wgpu::util::BufferInitDescriptor<'a> {
-        wgpu::util::BufferInitDescriptor {
-            label: Some(LABEL_VERTEX_BUFFER),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        }
-    }
-    pub fn index_descriptor<'a>(indices: &'a [u16]) -> wgpu::util::BufferInitDescriptor<'a> {
-        wgpu::util::BufferInitDescriptor {
-            label: Some(LABEL_INDEX_BUFFER),
-            contents: bytemuck::cast_slice(indices),
-            usage: wgpu::BufferUsages::INDEX,
-        }
-    }
-    pub fn model_uniform_buffer() {}
-    pub fn camera_uniform_buffer() {}
 }
 
-pub fn create_buffer_init(
-    device: &wgpu::Device,
-    desc: &wgpu::util::BufferInitDescriptor<'_>,
-) -> wgpu::Buffer {
-    device.create_buffer_init(desc)
+pub trait IndexBuffer: bytemuck::Pod + bytemuck::Zeroable {
+    type IndexType: bytemuck::Pod + bytemuck::Zeroable;
+
+    fn create_index_buffer(device: &wgpu::Device, indices: &[Self::IndexType]) -> Buffer {
+        let desc = index_descriptor(indices);
+        init_buffer(device, desc)
+    }
+
+    fn create_static_index_buffer(device: &wgpu::Device, indices: &[Self::IndexType]) -> Buffer {
+        let desc = index_descriptor(indices);
+        init_buffer(device, desc)
+    }
 }
 
-pub fn create_buffer(device: &wgpu::Device, desc: wgpu::BufferDescriptor<'_>) -> wgpu::Buffer {
-    device.create_buffer(&desc)
+pub trait VertexBuffer: bytemuck::Pod + bytemuck::Zeroable {
+    fn vertex_buffer_layout<'a>() -> wgpu::VertexBufferLayout<'a>;
+
+    fn create_vertex_buffer(device: &wgpu::Device, vertices: &[Vertex]) -> Buffer {
+        let desc = vertex_descriptor(vertices);
+        init_buffer(device, desc)
+    }
+
+    fn create_static_vertex_buffer(device: &wgpu::Device, vertices: &[Vertex]) -> Buffer {
+        let desc = vertex_descriptor(vertices);
+        init_buffer(device, desc)
+    }
+}
+
+pub trait WgpuBufferBinding {
+    fn buffer_binding<'a>(buffer: &'a Buffer, offset: u64) -> wgpu::BufferBinding<'a>;
+}
+
+pub fn init_buffer(device: &wgpu::Device, desc: wgpu::util::BufferInitDescriptor) -> Buffer {
+    device.create_buffer_init(&desc)
+}
+
+pub fn vertex_descriptor<'a>(vertices: &'a [Vertex]) -> wgpu::util::BufferInitDescriptor<'a> {
+    wgpu::util::BufferInitDescriptor {
+        label: Some(VERTEX_BUFFER_LABEL),
+        contents: bytemuck::cast_slice(vertices),
+        usage: BufferUsages::VERTEX,
+    }
+}
+
+pub fn index_descriptor<'a, T: bytemuck::Pod>(
+    indices: &'a [T],
+) -> wgpu::util::BufferInitDescriptor<'a> {
+    wgpu::util::BufferInitDescriptor {
+        label: Some(INDEX_BUFFER_LABEL),
+        contents: bytemuck::cast_slice(indices),
+        usage: BufferUsages::INDEX,
+    }
+}
+
+pub fn uniform_descriptor<'a>(uniforms: &'a [Uniforms]) -> wgpu::util::BufferInitDescriptor<'a> {
+    wgpu::util::BufferInitDescriptor {
+        label: Some(UNIFORM_BUFFER_LABEL),
+        contents: bytemuck::cast_slice(uniforms),
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    }
+}
+
+pub fn vertex_buffer(device: &wgpu::Device, vertices: &[Vertex]) -> Buffer {
+    let desc = vertex_descriptor(vertices);
+    init_buffer(device, desc)
+}
+
+pub fn index_buffer<T: bytemuck::Pod>(device: &wgpu::Device, indices: &[T]) -> Buffer {
+    let desc = index_descriptor(indices);
+    init_buffer(device, desc)
+}
+
+pub fn uniform_buffer(device: &wgpu::Device, uniforms: &Uniforms) -> Buffer {
+    let binding = [*uniforms];
+    let desc = uniform_descriptor(&binding);
+    init_buffer(device, desc)
+}
+
+impl IndexBuffer for u16 {
+    type IndexType = u16;
+    fn create_index_buffer(device: &wgpu::Device, indices: &[Self]) -> Buffer {
+        let desc = index_descriptor(indices);
+        init_buffer(device, desc)
+    }
 }

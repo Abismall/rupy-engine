@@ -1,14 +1,12 @@
 pub mod proxy;
 use winit::event::{Modifiers, MouseButton};
 
-use crate::graphics::texture::TextureAttachment;
+use crate::texture::TextureFileDescriptor;
 
-#[derive(Clone, Debug)]
-
+#[derive(Debug)]
 pub enum RupyAppEvent {
-    Shutdown(u32),
-    ListShaderFilesTaskCompleted(Vec<String>),
-    LoadTextureTaskCompleted(Vec<TextureAttachment>),
+    Shutdown,
+    TaskCompleted(crate::prelude::WorkerTaskCompletion),
     Initialized,
     ToggleConsole,
     ToggleDebugMode,
@@ -21,7 +19,6 @@ pub enum RupyAppEvent {
     VolumeUp,
     VolumeDown,
 
-    ExitRequest,
     KeyPressed {
         key_code: u32,
         modifiers: Modifiers, // Control, Shift, Alt, etc.
@@ -113,4 +110,9 @@ pub enum RupyAppEvent {
         sound_id: u64,
         message: String,
     },
+}
+#[derive(Debug)]
+pub enum WorkerTaskCompletion {
+    LoadTextureFiles(Vec<TextureFileDescriptor>),
+    LoadShaderFiles(Vec<String>),
 }

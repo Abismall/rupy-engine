@@ -1,195 +1,274 @@
-pub mod frustum;
-pub mod perspective;
-use perspective::CameraPerspective;
-use quaternion::Quaternion;
-use vecmath::traits::{One, Zero};
-use winit::window::WindowId;
-
-use crate::{
-    math::{vector::rotate_vector, Mat4, Vec3},
-    prelude::{cross_vec3, dot_vec3, normalize_vec3, subtract_vec3},
-};
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-pub enum ProjectionType {
-    Perspective,
-    Orthographic,
-}
-
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy)]
 pub struct Camera {
-    pub projection_type: ProjectionType,
-    pub position: Vec3,
-    pub up: Vec3,
-    pub right: Vec3,
-    pub forward: Vec3,
+    pub position: Point3<f32>,
+    pub target: Point3<f32>,
+    pub up: nalgebra::Vector3<f32>,
+    pub proj_matrix: Matrix4<f32>,
+    pub aspect_ratio: f32,
+    pub fov_y: f32,
+    pub near: f32,
+    pub far: f32,
     pub yaw: f32,
-    pub sensitivity: f32,
-    pub speed: f32,
     pub pitch: f32,
-    pub id: Option<WindowId>,
+    pub distance: f32,
+    pub is_panning: bool,
+    pub move_speed: f32,
+    pub accesseleration: f32,
 }
-
 impl Camera {
-    const MAX_PITCH: f32 = std::f32::consts::FRAC_PI_2 - 0.01;
-
-    pub fn new(position: Option<Vec3>, projection_type: ProjectionType) -> Camera {
-        let yaw = 0.0;
-        let pitch = 0.0;
-        let camera = Camera {
-            position: position.unwrap_or_else(|| [0.0, 0.0, -5.0]),
-            right: [1.0, 0.0, 0.0],
-            up: [0.0, 1.0, 0.0],
-            forward: [0.0, 0.0, -1.0],
-            sensitivity: 0.1,
-            speed: 0.08,
+    pub fn new(
+        position: Point3<f32>,
+        target: Point3<f32>,
+        up: nalgebra::Vector3<f32>,
+        aspect_ratio: f32,
+        accesseleration: f32,
+        fov_y: f32,
+        near: f32,
+        far: f32,
+    ) -> Self {
+        let direction = (position - target).normalize();
+        let distance = (position - target).magnitude();
+        let yaw = direction.z.atan2(direction.x);
+        let pitch = direction.y.asin();
+        Camera {
+            position,
+            target,
+            up,
+            aspect_ratio,
+            fov_y,
+            near,
+            far,
             yaw,
             pitch,
-            id: None,
-            projection_type,
-        };
-
-        camera
-    }
-
-    pub fn look_at(&mut self, point: Vec3) {
-        self.forward = normalize_vec3(subtract_vec3(point, self.position));
-        self.update_right();
-    }
-
-    fn update_right(&mut self) {
-        self.right = normalize_vec3(cross_vec3(self.up, self.forward));
-    }
-    pub fn move_forward(&mut self, delta: f32) {
-        // Move forward along the forward vector
-        let forward_normalized = normalize_vec3(self.forward);
-        for i in 0..3 {
-            self.position[i] += forward_normalized[i] * delta;
+            accesseleration,
+            distance,
+            is_panning: false,
+            move_speed: 25.0,
+            proj_matrix: Default::default(),
         }
     }
-
-    pub fn move_right(&mut self, delta: f32) {
-        // Move right along the right vector
-        let right_normalized = normalize_vec3(self.right);
-        for i in 0..3 {
-            self.position[i] += right_normalized[i] * delta;
-        }
+    pub fn set_orthographic_projection(
+        &mut self,
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    ) {
+        self.proj_matrix = Matrix4::new_orthographic(left, right, bottom, top, near, far);
     }
 
-    pub fn move_up(&mut self, delta: f32) {
-        // Move up along the up vector
-        let up_normalized = normalize_vec3(self.up);
-        for i in 0..3 {
-            self.position[i] += up_normalized[i] * delta;
-        }
+    pub fn set_perspective_projection(
+        &mut self,
+        fov_y: f32,
+        aspect_ratio: f32,
+        near: f32,
+        far: f32,
+    ) {
+        self.proj_matrix = Matrix4::new_perspective(aspect_ratio, fov_y, near, far);
     }
-
-    pub fn rotate(&mut self, yaw_offset: f32, pitch_offset: f32) {
-        self.yaw += yaw_offset * self.sensitivity;
-        self.pitch += pitch_offset * self.sensitivity;
-
-        // Clamp the pitch to avoid flipping upside down
-        self.pitch = self.pitch.clamp(-Self::MAX_PITCH, Self::MAX_PITCH);
-
-        // Update the forward, right, and up vectors after changing yaw/pitch
-
-        self.update_vectors();
+    pub fn view_matrix(&self) -> Matrix4<f32> {
+        Matrix4::look_at_rh(&self.position, &self.target, &self.up)
     }
+    pub fn projection_matrix(&self) -> Matrix4<f32> {
+        Matrix4::new_perspective(self.aspect_ratio, self.fov_y, self.near, self.far)
+    }
+    pub fn view_projection_matrix(&self) -> Matrix4<f32> {
+        self.projection_matrix() * self.view_matrix()
+    }
+    pub fn update_camera_position(&mut self) {
+        let x = self.distance * self.pitch.cos() * self.yaw.cos();
+        let y = self.distance * self.pitch.sin();
+        let z = self.distance * self.pitch.cos() * self.yaw.sin();
+        let offset = Vector3::new(x, y, z);
+        self.position = self.target + offset;
+    }
+    pub fn rotate(&mut self, delta_yaw: f32, delta_pitch: f32) {
+        self.yaw += delta_yaw;
+        self.pitch = (self.pitch + delta_pitch).clamp(-1.5, 1.5);
+        self.update_camera_position();
+    }
+    pub fn zoom(&mut self, amount: f32) {
+        self.distance = (self.distance - amount).clamp(0.5, 100.0);
+        self.update_camera_position();
+    }
+    pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
+        let right = Vector3::new(self.yaw.sin(), 0.0, -self.yaw.cos()).normalize();
+        let up = self.up;
 
-    fn update_vectors(&mut self) {
-        // Calculate the forward vector using yaw and pitch
-        self.forward = normalize_vec3([
-            self.pitch.cos() * self.yaw.cos(),
+        self.target += right * delta_x - up * delta_y;
+
+        self.update_camera_position();
+    }
+    pub fn move_forward(&mut self, delta_time: f32) {
+        let forward = Vector3::new(
+            self.yaw.cos() * self.pitch.cos(),
             self.pitch.sin(),
-            self.pitch.cos() * self.yaw.sin(),
-        ]);
-
-        // Recalculate right and up vectors based on new forward vector
-        let world_up = [0.0, 1.0, 0.0];
-        self.right = normalize_vec3(cross_vec3(world_up, self.forward));
-        self.up = cross_vec3(self.forward, self.right);
+            self.yaw.sin() * self.pitch.cos(),
+        )
+        .normalize();
+        self.target += forward * self.move_speed * delta_time * self.accesseleration;
+        self.update_camera_position();
     }
-    pub fn set_yaw_pitch(&mut self, yaw_offset: f32, pitch_offset: f32) {
-        // Update yaw and pitch with provided offsets
-        self.yaw += yaw_offset * self.sensitivity;
-        self.pitch += pitch_offset * self.sensitivity;
-
-        // Clamp the pitch to avoid flipping upside down
-        self.pitch = self.pitch.clamp(-Self::MAX_PITCH, Self::MAX_PITCH);
-
-        // Update the forward, right, and up vectors after changing yaw/pitch
-        self.update_vectors();
+    pub fn move_right(&mut self, delta_time: f32) {
+        let right = Vector3::new(self.yaw.sin(), 0.0, -self.yaw.cos()).normalize();
+        self.target += right * self.move_speed * delta_time * self.accesseleration;
+        self.update_camera_position();
     }
+}
 
-    pub fn rotate_y(angle: f32) -> Mat4 {
-        let cos_angle = angle.cos();
-        let sin_angle = angle.sin();
-        [
-            [cos_angle, 0.0, -sin_angle, 0.0],
-            [0.0, 1.0, 0.0, 0.0],
-            [sin_angle, 0.0, cos_angle, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
+impl Default for Camera {
+    fn default() -> Self {
+        Camera::new(
+            Point3::new(5.0, 0.0, 0.0),
+            Point3::new(0.0, 0.0, 0.0),
+            *Vector3::y_axis(),
+            16.0 / 9.0,
+            25.0,
+            std::f32::consts::FRAC_PI_2,
+            0.1,
+            100.0,
+        )
     }
+}
+use nalgebra::{Matrix4, Point3, Vector3};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta};
+use winit::keyboard::KeyCode;
 
-    pub fn view_matrix(&self) -> Mat4 {
-        let forward = normalize_vec3(self.forward);
-        let right = normalize_vec3(self.right);
-        let up = normalize_vec3(self.up);
-        let pos = self.position;
-
-        // Translation part
-        let translation = [
-            -dot_vec3(right, pos),
-            -dot_vec3(up, pos),
-            -dot_vec3(forward, pos),
-        ];
-
-        // Create the look-at matrix (aka the view matrix)
-        [
-            [right[0], up[0], forward[0], 0.0],
-            [right[1], up[1], forward[1], 0.0],
-            [right[2], up[2], forward[2], 0.0],
-            [translation[0], translation[1], translation[2], 1.0],
-        ]
-    }
-
-    // Update the projection_matrix method
-    pub fn projection_matrix(&self, perspective: &CameraPerspective) -> Mat4 {
-        match self.projection_type {
-            ProjectionType::Perspective => perspective.perspective_projection(),
-            ProjectionType::Orthographic => perspective.orthographic_projection(),
+use crate::input::InputListener;
+use crate::{log_debug, log_error};
+impl InputListener for Camera {
+    fn on_key_event(&mut self, event: &KeyEvent, delta_time: f32) {
+        match event.physical_key {
+            winit::keyboard::PhysicalKey::Code(KeyCode::KeyW) => self.move_forward(-delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::KeyS) => self.move_forward(delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::KeyA) => self.move_right(-delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::KeyD) => self.move_right(delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::ArrowUp) => self.pan(0.0, delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::ArrowDown) => self.pan(0.0, -delta_time),
+            winit::keyboard::PhysicalKey::Code(KeyCode::ArrowLeft) => self.pan(-delta_time, 0.0),
+            winit::keyboard::PhysicalKey::Code(KeyCode::ArrowRight) => self.pan(delta_time, 0.0),
+            _ => (),
         }
     }
-    pub fn orthogonal(&self) -> Mat4 {
-        let forward = normalize_vec3(self.forward);
-        let right = normalize_vec3(self.right);
-        let up = normalize_vec3(self.up);
-        let pos = self.position;
+    fn on_mouse_motion(&mut self, delta: (f64, f64)) {
+        if !self.is_panning {
+            self.rotate(delta.0 as f32 * 0.01, delta.1 as f32 * 0.01);
+        } else {
+            let delta_x = delta.0 as f32 * 0.05;
+            let delta_y = delta.1 as f32 * 0.05;
+            self.pan(delta_x, delta_y);
+        }
+    }
+    fn on_mouse_button(&mut self, button: MouseButton, state: ElementState) {
+        if button == MouseButton::Left {
+            self.is_panning = state == ElementState::Pressed;
+        }
+    }
+    fn on_scroll(&mut self, delta: MouseScrollDelta) {
+        match delta {
+            MouseScrollDelta::LineDelta(_, scroll_y) => self.zoom(scroll_y),
+            MouseScrollDelta::PixelDelta(delta) => self.zoom(delta.y as f32 * 0.1),
+        }
+    }
+}
+#[repr(C)]
+#[derive(Default, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+pub struct Plane {
+    pub normal: [f32; 3],
+    pub distance: f32,
+}
 
-        // Translation part
-        let translation = [
-            -dot_vec3(right, pos),
-            -dot_vec3(up, pos),
-            -dot_vec3(forward, pos),
+#[repr(C)]
+#[derive(Default, bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+pub struct Frustum {
+    pub planes: [Plane; 6],
+}
+
+impl Frustum {
+    pub fn from_view_projection_matrix(vp_matrix: &Matrix4<f32>) -> Self {
+        let mut planes = [
+            Self::extract_plane(vp_matrix, 0, 3, 0),  // Left
+            Self::extract_plane(vp_matrix, 1, 3, 0),  // Right
+            Self::extract_plane(vp_matrix, 2, 3, 0),  // Bottom
+            Self::extract_plane(vp_matrix, 3, 3, 0),  // Top
+            Self::extract_plane(vp_matrix, 2, 3, -1), // Near
+            Self::extract_plane(vp_matrix, 2, 3, 1),  // Far
         ];
 
-        // Create the look-at matrix (aka the view matrix)
+        for plane in &mut planes {
+            let normal = Vector3::from(plane.normal);
+            let length = normal.norm();
+            plane.normal = (normal / length).into();
+            plane.distance /= length;
+        }
+
+        Frustum { planes }
+    }
+
+    fn extract_plane(vp_matrix: &Matrix4<f32>, row: usize, column: usize, sign: i32) -> Plane {
+        let m = vp_matrix;
+
+        let normal = Vector3::new(
+            m[(0, 3)] + sign as f32 * m[(0, row)],
+            m[(1, 3)] + sign as f32 * m[(1, row)],
+            m[(2, 3)] + sign as f32 * m[(2, row)],
+        );
+
+        let distance = m[(3, 3)] + sign as f32 * m[(3, row)];
+
+        Plane {
+            normal: normal.into(),
+            distance,
+        }
+    }
+
+    pub fn contains_sphere(&self, center: Vector3<f32>, radius: f32) -> bool {
+        for plane in &self.planes {
+            let normal = Vector3::from(plane.normal);
+            let distance = normal.dot(&center) + plane.distance;
+            if distance < -radius {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn corners(&self) -> [Vector3<f32>; 8] {
+        let planes = &self.planes;
         [
-            [right[0], up[0], forward[0], 0.0],
-            [right[1], up[1], forward[1], 0.0],
-            [right[2], up[2], forward[2], 0.0],
-            [translation[0], translation[1], translation[2], 1.0],
+            Self::intersect_planes(&planes[0], &planes[2], &planes[4]), // Near bottom-left
+            Self::intersect_planes(&planes[1], &planes[2], &planes[4]), // Near bottom-right
+            Self::intersect_planes(&planes[1], &planes[3], &planes[4]), // Near top-right
+            Self::intersect_planes(&planes[0], &planes[3], &planes[4]), // Near top-left
+            Self::intersect_planes(&planes[0], &planes[2], &planes[5]), // Far bottom-left
+            Self::intersect_planes(&planes[1], &planes[2], &planes[5]), // Far bottom-right
+            Self::intersect_planes(&planes[1], &planes[3], &planes[5]), // Far top-right
+            Self::intersect_planes(&planes[0], &planes[3], &planes[5]), // Far top-left
         ]
     }
 
-    pub fn set_rotation(&mut self, rotation: Quaternion<f32>) {
-        let _0: f32 = Zero::zero();
-        let _1: f32 = One::one();
-        let forward: Vec3 = [_0, _0, _1];
-        let up: Vec3 = [_0, _1, _0];
-        self.forward = rotate_vector(rotation, forward);
-        self.up = rotate_vector(rotation, up);
-        self.update_right();
+    fn intersect_planes(p1: &Plane, p2: &Plane, p3: &Plane) -> Vector3<f32> {
+        let n1 = Vector3::from(p1.normal);
+        let n2 = Vector3::from(p2.normal);
+        let n3 = Vector3::from(p3.normal);
+        let d1 = p1.distance;
+        let d2 = p2.distance;
+        let d3 = p3.distance;
+
+        let cross_n2_n3 = n2.cross(&n3);
+        let cross_n3_n1 = n3.cross(&n1);
+        let cross_n1_n2 = n1.cross(&n2);
+
+        let numerator = (cross_n2_n3 * d1) + (cross_n3_n1 * d2) + (cross_n1_n2 * d3);
+        let denominator = n1.dot(&cross_n2_n3);
+
+        if denominator == 0.0 {
+            log_error!("Intersection calculation failed due to zero denominator");
+            return Vector3::new(0.0, 0.0, 0.0);
+        }
+
+        numerator / denominator
     }
 }

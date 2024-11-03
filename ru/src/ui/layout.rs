@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use crate::scene::{components::mesh::Mesh, material::MaterialStructure};
+use crate::{material::Material, shader::Mesh};
 
 #[derive(Debug)]
 pub struct UIComponent {
-    pub material: Arc<MaterialStructure>,
+    pub material: Arc<Material>,
     pub mesh: Mesh,
 }
 
 impl UIComponent {
-    pub fn new(material: Arc<MaterialStructure>, mesh: Mesh) -> Self {
+    pub fn new(material: Arc<Material>, mesh: Mesh) -> Self {
         Self { material, mesh }
     }
 }

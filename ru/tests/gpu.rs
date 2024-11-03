@@ -1,12 +1,12 @@
 #[cfg(test)]
-use rupy::graphics::gpu::{
-    get_adapter, get_device, get_instance, get_queue, initialize_gpu_resources_cache,
+use rupy::graphics::global::{
+    get_adapter, get_device, get_instance, get_queue, initialize_instance,
 };
 use std::sync::Arc;
 
 #[tokio::test]
-async fn test_initialize_gpu_resources_cache() {
-    initialize_gpu_resources_cache()
+async fn test_initialize_instance() {
+    initialize_instance()
         .await
         .expect("Failed to initialize GPU resources");
 
@@ -35,12 +35,12 @@ async fn test_initialize_gpu_resources_cache() {
 }
 
 #[tokio::test]
-async fn test_reinitialize_gpu_resources_cache() {
-    initialize_gpu_resources_cache()
+async fn test_reinitialize_instance() {
+    initialize_instance()
         .await
         .expect("Failed to initialize GPU resources");
 
-    initialize_gpu_resources_cache()
+    initialize_instance()
         .await
         .expect("Failed to initialize GPU resources");
 
