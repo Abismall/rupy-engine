@@ -5,3 +5,5 @@ A special thanks to all the content creators, developers, and contributors who s
 - **[@TheCherno](https://www.youtube.com/@TheCherno)** – for excellent free tutorials on creating game engines.
 - **[@TechWithTim](https://www.youtube.com/@TechWithTim)** – for a wide range of tutorials, covering topics from beginner to advanced.
 - **[@Javidx9/Onelonecoder](https://www.onelonecoder.com)** – for offering programming and technology tutorials from a unique perspective.
+
+***"There are currently 5 games written in rust... and 50 game engines"***
