@@ -13,7 +13,7 @@ use glyphon::{
     cosmic_text::LineEnding, Attrs, AttrsList, Cache, Family, FontSystem, Shaping, SwashCache,
     TextArea, TextAtlas, TextRenderer, Viewport,
 };
-use nalgebra::Vector3;
+
 use wgpu::{CommandEncoder, Device, Queue, SurfaceConfiguration, TextureView};
 
 use crate::app::DebugMode;
@@ -104,7 +104,6 @@ impl GlyphonManager {
         view: &TextureView,
         depth_stencil_attachment: Option<&wgpu::RenderPassDepthStencilAttachment>,
         surface_config: &SurfaceConfiguration,
-        debug: &DebugMode,
     ) {
         self.viewport.update(
             queue,

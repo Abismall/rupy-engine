@@ -63,7 +63,11 @@ impl Rupy {
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<winit::window::Window, AppError> {
-        match event_loop.create_window(WindowAttributes::default()) {
+        match event_loop.create_window(
+            WindowAttributes::default()
+                .with_title("RupyEngine")
+                .with_active(true),
+        ) {
             Ok(win) => Ok(win),
             Err(e) => Err(AppError::from(e)),
         }

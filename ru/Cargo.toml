@@ -2,6 +2,7 @@
 name = "rupy"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 pollster = "0.3.0"
@@ -42,9 +43,6 @@ serialize = ["serde", "serde_derive"]
 [lib]
 path = "src/lib.rs"
 
-[[bin]]
-name = "engine"
-path = "src/bin/engine.rs"
 
 [[bin]]
 name = "resize_images"

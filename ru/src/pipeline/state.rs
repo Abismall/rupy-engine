@@ -47,7 +47,7 @@ impl PrimitiveStateConfig {
             PrimitiveStateConfig::PointList => PrimitiveState {
                 topology: PrimitiveTopology::PointList,
                 front_face: FrontFace::Ccw,
-                cull_mode: Some(Face::Front),
+                cull_mode: None,
                 ..Default::default()
             },
             PrimitiveStateConfig::Custom {

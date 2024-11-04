@@ -93,7 +93,6 @@ impl TextureFileCache {
             offset,
         )?);
         let texture_bind_group = texture_bind_group(&device, &texture.view, &texture.sampler);
-        drop(device);
         let queue = &get_queue()?;
         if let Err(e) = write_texture_to_queue(queue, &texture) {
             log_error!("{:?}", e);

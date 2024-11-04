@@ -145,7 +145,7 @@ impl RenderContext {
 }
 impl RenderContext {
     pub async fn new(window: Arc<Window>, mode: RenderMode, debug: DebugMode) -> Self {
-        let target_fps = 300;
+        let target_fps = 9000;
         let frame_duration = Duration::from_secs_f64(1.0 / target_fps as f64);
         let instance = get_instance().expect("Instance");
         let adapter = get_adapter().expect("Adapter");
@@ -163,10 +163,10 @@ impl RenderContext {
             &Uniforms {
                 model: ModelUniform { matrix: mat4_id() },
                 color: ColorUniform {
-                    rgba: [1.0 as f32, 1.0 as f32, 1.0 as f32, 1.0 as f32],
+                    rgba: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
                 },
                 view_projection: ViewProjectionMatrix {
-                    matrix: Default::default(),
+                    matrix: camera.view_projection_matrix().into(),
                 },
             },
         );
@@ -202,9 +202,9 @@ impl RenderContext {
         );
 
         let _ = material_manager.create_material(
-            Geometry::Cube(Cube::new(10, 10, 10, Vector3::new(0.0, 0.0, 1.0))),
+            Geometry::Cube(Cube::new(25, 25, 25, Vector3::new(0.0, 0.0, 1.0))),
             camera.view_projection_matrix(),
-            [1.0, 1.0, 1.0, 1.0],
+            [0.0, 0.0, 0.0, 0.0],
             "cube".into(),
             None,
         );
@@ -405,7 +405,6 @@ impl RenderContext {
                         &view,
                         depth_stencil_attachment.as_ref(),
                         &self.render_surface.surface_config,
-                        &self.debug,
                     );
                 }
                 if self.mode == RenderMode::Depth || self.mode == RenderMode::WireWithDepth {

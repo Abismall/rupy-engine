@@ -79,10 +79,10 @@ impl InputHandler {
 }
 
 #[derive(Debug)]
-struct MouseMovementDetails {
-    direction: String,
-    speed: f64,
-    delta: (f64, f64),
+pub struct MouseMovementDetails {
+    pub direction: String,
+    pub speed: f64,
+    pub delta: (f64, f64),
 }
 impl MouseMovementDetails {
     pub fn new(delta: (f64, f64)) -> Self {

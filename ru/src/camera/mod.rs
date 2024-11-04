@@ -137,7 +137,7 @@ use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta};
 use winit::keyboard::KeyCode;
 
 use crate::input::InputListener;
-use crate::{log_debug, log_error};
+use crate::log_error;
 impl InputListener for Camera {
     fn on_key_event(&mut self, event: &KeyEvent, delta_time: f32) {
         match event.physical_key {
@@ -207,7 +207,7 @@ impl Frustum {
         Frustum { planes }
     }
 
-    fn extract_plane(vp_matrix: &Matrix4<f32>, row: usize, column: usize, sign: i32) -> Plane {
+    fn extract_plane(vp_matrix: &Matrix4<f32>, row: usize, _column: usize, sign: i32) -> Plane {
         let m = vp_matrix;
 
         let normal = Vector3::new(

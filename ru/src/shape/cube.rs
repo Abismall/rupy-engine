@@ -56,25 +56,25 @@ impl Cube {
                 position: [-half_width, -half_height, -half_depth],
                 color: [0.0, 1.0, 0.0],
                 normal: [0.0, 0.0, -1.0],
-                tex_coords: [1.0, 0.0], // Bottom-right
+                tex_coords: [0.0, 0.0], // Bottom-left
             },
             Vertex {
                 position: [half_width, -half_height, -half_depth],
                 color: [0.0, 1.0, 0.0],
                 normal: [0.0, 0.0, -1.0],
-                tex_coords: [0.0, 0.0], // Bottom-left
+                tex_coords: [1.0, 0.0], // Bottom-right
             },
             Vertex {
                 position: [half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 0.0],
                 normal: [0.0, 0.0, -1.0],
-                tex_coords: [0.0, 1.0], // Top-left
+                tex_coords: [1.0, 1.0], // Top-right
             },
             Vertex {
                 position: [-half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 0.0],
                 normal: [0.0, 0.0, -1.0],
-                tex_coords: [1.0, 1.0], // Top-right
+                tex_coords: [0.0, 1.0], // Top-left
             },
             // Left face
             Vertex {
@@ -106,50 +106,50 @@ impl Cube {
                 position: [half_width, -half_height, -half_depth],
                 color: [1.0, 1.0, 0.0],
                 normal: [1.0, 0.0, 0.0],
-                tex_coords: [1.0, 0.0], // Bottom-right
+                tex_coords: [0.0, 0.0], // Bottom-left
             },
             Vertex {
                 position: [half_width, -half_height, half_depth],
                 color: [1.0, 1.0, 0.0],
                 normal: [1.0, 0.0, 0.0],
-                tex_coords: [0.0, 0.0], // Bottom-left
+                tex_coords: [1.0, 0.0], // Bottom-right
             },
             Vertex {
                 position: [half_width, half_height, half_depth],
                 color: [1.0, 1.0, 0.0],
                 normal: [1.0, 0.0, 0.0],
-                tex_coords: [0.0, 1.0], // Top-left
+                tex_coords: [1.0, 1.0], // Top-right
             },
             Vertex {
                 position: [half_width, half_height, -half_depth],
                 color: [1.0, 1.0, 0.0],
                 normal: [1.0, 0.0, 0.0],
-                tex_coords: [1.0, 1.0], // Top-right
+                tex_coords: [0.0, 1.0], // Top-left
             },
             // Top face
             Vertex {
                 position: [-half_width, half_height, half_depth],
                 color: [0.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
-                tex_coords: [0.0, 1.0], // Top-left
+                tex_coords: [0.0, 0.0], // Bottom-left
             },
             Vertex {
                 position: [half_width, half_height, half_depth],
                 color: [0.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
-                tex_coords: [1.0, 1.0], // Top-right
+                tex_coords: [1.0, 0.0], // Bottom-right
             },
             Vertex {
                 position: [half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
-                tex_coords: [1.0, 0.0], // Bottom-right
+                tex_coords: [1.0, 1.0], // Top-right
             },
             Vertex {
                 position: [-half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
-                tex_coords: [0.0, 0.0], // Bottom-left
+                tex_coords: [0.0, 1.0], // Top-left
             },
             // Bottom face
             Vertex {
@@ -177,6 +177,7 @@ impl Cube {
                 tex_coords: [0.0, 1.0], // Top-left
             },
         ];
+
         let indices = vec![
             0, 1, 2, 2, 3, 0, // Front
             4, 5, 6, 6, 7, 4, // Back
