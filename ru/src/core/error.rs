@@ -1,6 +1,7 @@
 use glyphon::{PrepareError, RenderError};
 use image::ImageError;
 use log::SetLoggerError;
+use std::env::VarError;
 use std::io;
 
 use thiserror::Error;
@@ -13,15 +14,36 @@ use crate::events::RupyAppEvent;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("Material type error: {0}")]
+    MaterialTypeError(String),
+
+    #[error("Toml error: {0}")]
+    TomlError(#[from] toml::de::Error),
+
+    #[error("Serde yaml error: {0}")]
+    SerdeYamlError(#[from] serde_yaml::Error),
+
+    #[error("Config error: {0}")]
+    ConfigError(String),
+
+    #[error("Pipeline not found error: {0}")]
+    PipelineNotFoundError(String),
+
     #[error("Failed to parse shader source: {0}")]
     ShaderParseError(#[from] naga::front::wgsl::ParseError),
 
+    #[error("Var error: {0}")]
+    VarError(#[from] VarError),
+
     #[error("Failed to execute task.")]
     TaskJoinError(#[from] tokio::task::JoinError),
+
     #[error("Channel error: {0}")]
     ChannelError(String),
+
     #[error("Failed to load texture file: {0}")]
     TextureFileLoadError(String),
+
     #[error("Surface was lost or has not been initialized")]
     SurfaceInitializationError,
 

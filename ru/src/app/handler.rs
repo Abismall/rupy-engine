@@ -55,15 +55,13 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                 context.render_surface.surface_config.height = size.height;
                 context
                     .render_surface
-                    .surface
-                    .configure(&device_binding, &context.render_surface.surface_config);
+                    .resize(size.width, size.height, &context.device);
                 let (depth_texture, depth_texture_view) =
                     resize_depth_texture(&device_binding, &context.render_surface.surface_config);
                 match (depth_texture, depth_texture_view) {
                     (Some(texture), Some(view)) => {
                         context.depth_texture = Some(texture.into());
                         context.depth_texture_view = Some(view.into());
-                        context.render_surface.window.request_redraw();
                     }
                     _ => {}
                 }
@@ -108,17 +106,24 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                     PhysicalKey::Code(KeyCode::Escape) if is_pressed => {
                         self.state.set_shutting_down();
                     }
+                    PhysicalKey::Code(KeyCode::KeyP) if is_pressed => {
+                        self.state.set_paused();
+                    }
                     _ if is_pressed => {
-                        context
-                            .camera
-                            .on_key_event(&event, context.frame.delta_time);
+                        if self.state.is_running() {
+                            context
+                                .camera
+                                .on_key_event(&event, context.frame.delta_time);
+                        }
                     }
                     _ => {}
                 }
             }
 
             WindowEvent::RedrawRequested => {
-                let _ = context.render_frame();
+                if self.state.is_running() {
+                    let _ = context.render_frame();
+                }
             }
 
             _ => {}
@@ -127,25 +132,32 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RupyAppEvent) {
         match event {
-            RupyAppEvent::CreateWindow => {
-                let window = self.create_window(event_loop);
-                match window {
-                    Ok(win) => {
-                        let binding = block_on(RenderContext::new(
-                            win.into(),
-                            RenderMode::Depth,
-                            self.debug,
-                        ));
-                        self.render_context = Some(binding);
-                        self.state.set_running();
-                        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-                        log_info!("Event polling started");
-                    }
-                    Err(e) => {
-                        log_error!("Failed to create window: {:?}", e);
-                    }
+            RupyAppEvent::CreateWindow => match self.create_window(event_loop) {
+                Ok(win) => {
+                    let render_context = match block_on(RenderContext::new(
+                        win.into(),
+                        RenderMode::TriangleListDepthView,
+                        self.debug,
+                    )) {
+                        Ok(mut ctx) => {
+                            let _ = ctx.world.load_scene("test", &mut ctx.material_manager);
+
+                            ctx
+                        }
+                        Err(e) => {
+                            log_error!("{:?}", e);
+                            return;
+                        }
+                    };
+
+                    self.render_context = Some(render_context);
+                    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+                    self.state.set_running();
                 }
-            }
+                Err(e) => {
+                    log_error!("Failed to create window: {:?}", e);
+                }
+            },
             RupyAppEvent::TaskCompleted(task) => match task {
                 WorkerTaskCompletion::LoadTextureFiles(vec) => {
                     log_info!("Loaded {} textures", vec.len());

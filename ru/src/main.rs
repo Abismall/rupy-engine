@@ -40,7 +40,6 @@ async fn main() -> Result<(), AppError> {
     let event_bus_proxy = event_proxy.clone();
     let event_bus = EventBusProxy::new(event_bus_rx, event_bus_proxy);
     let app_state = AppState::empty();
-
     let mut rupy = Rupy {
         #[cfg(feature = "logging")]
         logger: LogFactory::default(),

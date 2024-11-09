@@ -1,64 +1,121 @@
 use std::{mem, num::NonZero};
 
-use nalgebra::Matrix4;
+use bytemuck::{Pod, Zeroable};
+use nalgebra::{Matrix4, Vector3};
+use serde::{Deserialize, Serialize};
 use wgpu::BufferBinding;
 
 use crate::graphics::buffer::WgpuBufferBinding;
+#[repr(C)]
+#[derive(Debug, Clone, Default, Copy, Serialize, Deserialize, Pod, Zeroable)]
+pub struct Transform {
+    pub position: [f32; 3],
+    pub rotation: [[f32; 4]; 4],
+    pub scale: [f32; 3],
+}
 
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug, Default)]
-pub struct ColorUniform {
+#[derive(Copy, Clone, Pod, Zeroable, Debug, Serialize, Deserialize)]
+pub struct UniformColor {
     pub rgba: [f32; 4],
 }
-impl From<[f32; 4]> for ColorUniform {
+impl Default for UniformColor {
+    fn default() -> Self {
+        Self {
+            rgba: [1.0, 1.0, 1.0, 1.0],
+        }
+    }
+}
+impl WgpuBufferBinding for UniformColor {
+    fn buffer_binding<'a>(buffer: &'a wgpu::Buffer, offset: u64) -> BufferBinding<'a> {
+        BufferBinding {
+            buffer,
+            offset,
+            size: NonZero::new(mem::size_of::<UniformColor>() as u64),
+        }
+    }
+}
+impl From<[f32; 4]> for UniformColor {
     fn from(array: [f32; 4]) -> Self {
-        ColorUniform { rgba: array }
+        UniformColor { rgba: array }
     }
 }
 
-impl From<ColorUniform> for [f32; 4] {
-    fn from(color_uniform: ColorUniform) -> Self {
+impl From<UniformColor> for [f32; 4] {
+    fn from(color_uniform: UniformColor) -> Self {
         color_uniform.rgba
     }
 }
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug, Default)]
-pub struct ViewProjectionMatrix {
+#[derive(Copy, Clone, Pod, Zeroable, Debug, Default, Serialize, Deserialize)]
+pub struct ViewProjection {
     pub matrix: [[f32; 4]; 4],
 }
-impl From<Matrix4<f32>> for ViewProjectionMatrix {
+impl From<Matrix4<f32>> for ViewProjection {
     fn from(mat: Matrix4<f32>) -> Self {
-        ViewProjectionMatrix { matrix: mat.into() }
+        ViewProjection { matrix: mat.into() }
     }
 }
 
-impl From<ViewProjectionMatrix> for Matrix4<f32> {
-    fn from(vp: ViewProjectionMatrix) -> Self {
+impl From<ViewProjection> for Matrix4<f32> {
+    fn from(vp: ViewProjection) -> Self {
         Matrix4::from(vp.matrix)
     }
 }
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug, Default)]
-pub struct ModelUniform {
-    pub matrix: [[f32; 4]; 4],
-}
-impl From<Matrix4<f32>> for ModelUniform {
-    fn from(mat: Matrix4<f32>) -> Self {
-        ModelUniform { matrix: mat.into() }
+
+impl WgpuBufferBinding for ViewProjection {
+    fn buffer_binding<'a>(buffer: &'a wgpu::Buffer, offset: u64) -> BufferBinding<'a> {
+        BufferBinding {
+            buffer,
+            offset,
+            size: NonZero::new(mem::size_of::<ViewProjection>() as u64),
+        }
     }
 }
 
-impl From<ModelUniform> for Matrix4<f32> {
-    fn from(model: ModelUniform) -> Self {
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug, Default, Serialize, Deserialize)]
+pub struct UniformModel {
+    matrix: [[f32; 4]; 4],
+}
+impl UniformModel {
+    pub fn matrix(&self) -> [[f32; 4]; 4] {
+        self.matrix
+    }
+}
+impl From<Matrix4<f32>> for UniformModel {
+    fn from(mat: Matrix4<f32>) -> Self {
+        UniformModel { matrix: mat.into() }
+    }
+}
+
+impl From<UniformModel> for Matrix4<f32> {
+    fn from(model: UniformModel) -> Self {
         Matrix4::from(model.matrix)
     }
 }
+impl WgpuBufferBinding for UniformModel {
+    fn buffer_binding<'a>(buffer: &'a wgpu::Buffer, offset: u64) -> BufferBinding<'a> {
+        BufferBinding {
+            buffer,
+            offset,
+            size: NonZero::new(mem::size_of::<UniformModel>() as u64),
+        }
+    }
+}
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable, Debug, Default)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug, Default, Serialize, Deserialize)]
 pub struct Uniforms {
-    pub model: ModelUniform,
-    pub view_projection: ViewProjectionMatrix,
-    pub color: ColorUniform,
+    pub model: UniformModel,
+    pub view_projection: ViewProjection,
+    pub color: UniformColor,
+}
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug, Default, Serialize, Deserialize)]
+pub struct UniformTransform {
+    pub scale: [[f32; 4]; 4],
+    pub rotation: [[f32; 4]; 4],
+    pub position: [f32; 3],
 }
 
 impl WgpuBufferBinding for Uniforms {
@@ -68,5 +125,10 @@ impl WgpuBufferBinding for Uniforms {
             offset,
             size: NonZero::new(mem::size_of::<Uniforms>() as u64),
         }
+    }
+}
+impl From<[[f32; 4]; 4]> for UniformModel {
+    fn from(matrix: [[f32; 4]; 4]) -> Self {
+        UniformModel { matrix }
     }
 }

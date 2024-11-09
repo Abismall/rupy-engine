@@ -13,7 +13,7 @@ use glyphon::{
     cosmic_text::LineEnding, Attrs, AttrsList, Cache, Family, FontSystem, Shaping, SwashCache,
     TextArea, TextAtlas, TextRenderer, Viewport,
 };
-
+use nalgebra::Vector3;
 use wgpu::{CommandEncoder, Device, Queue, SurfaceConfiguration, TextureView};
 
 use crate::app::DebugMode;
@@ -201,7 +201,7 @@ impl GlyphonManager {
             }
         }
 
-        self.atlas.trim();
+        //self.atlas.trim();
     }
 
     pub fn clear_buffer(&mut self) {

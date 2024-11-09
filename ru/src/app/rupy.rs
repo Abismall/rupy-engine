@@ -11,6 +11,7 @@ use crate::{
     events::RupyAppEvent,
     graphics::{global::initialize_instance, RenderMode},
     log_debug, log_error, log_info,
+    prelude::helpers::get_window_attributes,
     traits::bus::EventProxyTrait,
 };
 
@@ -24,6 +25,7 @@ pub struct Rupy {
     pub logger: rupyLogger::factory::LogFactory,
     pub debug: DebugMode,
     pub state: AppState,
+
     pub render_context: Option<RenderContext>,
 }
 
@@ -57,16 +59,20 @@ impl Rupy {
             log_error!("Failed to send initialized event: {:?}", e);
             return Err(e);
         }
+
         Ok(())
     }
     pub fn create_window(
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<winit::window::Window, AppError> {
+        let (width, height, x, y) = get_window_attributes();
         match event_loop.create_window(
             WindowAttributes::default()
                 .with_title("RupyEngine")
-                .with_active(true),
+                .with_decorations(false)
+                .with_inner_size(winit::dpi::LogicalSize::new(width, height))
+                .with_position(winit::dpi::LogicalPosition::new(x, y)),
         ) {
             Ok(win) => Ok(win),
             Err(e) => Err(AppError::from(e)),
@@ -89,21 +95,16 @@ impl Rupy {
 
     pub fn toggle_render_mode(&mut self) {
         if let Some(ctx) = &mut self.render_context {
-            ctx.mode = match ctx.mode {
-                RenderMode::Depth => RenderMode::WireWithDepth,
-                RenderMode::WireWithDepth => RenderMode::Flat,
-                RenderMode::Flat => RenderMode::WireNoDepth,
-                RenderMode::WireNoDepth => RenderMode::Depth,
+            let mode = match ctx.mode {
+                RenderMode::TriangleListDepthView => RenderMode::TriangleListNoDepth,
+                RenderMode::TriangleListNoDepth => RenderMode::LineListDepthView,
+                RenderMode::LineListDepthView => RenderMode::LineListNoDepth,
+                RenderMode::LineListNoDepth => RenderMode::TriangleListDepthView,
             };
-            log_debug!("{:?}", ctx.mode);
-            match ctx.mode {
-                RenderMode::Depth | RenderMode::WireWithDepth => {
-                    ctx.enable_depth_stencil();
-                }
-                RenderMode::Flat | RenderMode::WireNoDepth => {
-                    ctx.disable_depth_stencil();
-                }
-            }
+
+            ctx.set_render_mode(mode);
+            ctx.text_rendering_system
+                .set_use_depth(mode.use_depth_stencil());
         }
     }
 }

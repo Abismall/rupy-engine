@@ -1,13 +1,13 @@
 use wgpu::util::DeviceExt;
 use wgpu::{Buffer, BufferUsages};
 
-use crate::ecs::components::uniform::Uniforms;
+use crate::ecs::components::uniform::{UniformColor, Uniforms};
 use crate::ecs::components::vertex::Vertex;
 
 pub const UNIFORM_BUFFER_LABEL: &str = "uniform_buffer";
 pub const VERTEX_BUFFER_LABEL: &str = "vertex_buffer";
 pub const INDEX_BUFFER_LABEL: &str = "index_buffer";
-
+pub const UNIFORM_COLOR_BUFFER_LABEL: &str = "index_buffer";
 pub trait UniformBuffer: bytemuck::Pod + bytemuck::Zeroable {
     fn create_uniform_buffer(device: &wgpu::Device, data: &Uniforms) -> Buffer {
         uniform_buffer(device, data)
@@ -97,7 +97,13 @@ pub fn uniform_buffer(device: &wgpu::Device, uniforms: &Uniforms) -> Buffer {
     let desc = uniform_descriptor(&binding);
     init_buffer(device, desc)
 }
-
+pub fn color_buffer(device: &wgpu::Device, color: UniformColor) -> Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some(UNIFORM_COLOR_BUFFER_LABEL),
+        contents: bytemuck::cast_slice(&[color]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    })
+}
 impl IndexBuffer for u16 {
     type IndexType = u16;
     fn create_index_buffer(device: &wgpu::Device, indices: &[Self]) -> Buffer {

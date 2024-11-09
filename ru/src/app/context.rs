@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use super::DebugMode;
 use crate::{
@@ -7,24 +7,33 @@ use crate::{
         error::AppError,
         surface::{default_surface_configuration, RenderSurface},
     },
-    ecs::components::uniform::{ColorUniform, ModelUniform, Uniforms, ViewProjectionMatrix},
+    ecs::{
+        components::{
+            create_model_matrix,
+            model::{Material, Mesh},
+            uniform::{Transform, UniformColor, Uniforms},
+        },
+        systems::{materials::MaterialManager, world::World},
+    },
     graphics::{
-        binding::{uniform_bind_group, uniform_bind_group_layout, BindingGroups, BindingLayouts},
-        buffer::uniform_buffer,
+        binding::{
+            color_bind_group, color_bind_group_layout, uniform_bind_group,
+            uniform_bind_group_layout, BindingLayouts,
+        },
+        buffer::{color_buffer, uniform_buffer},
         global::{get_adapter, get_device, get_instance, get_queue},
         glyphon::GlyphonManager,
-        RenderMode,
+        RenderMode, LINE_LIST_COLORED_DEPTH_VIEW_PIPELINE_LABEL,
     },
     log_debug, log_error,
-    pipeline::cache::setup_pipeline_manager,
+    pipeline::cache::{setup_pipeline_manager, PipelineManager},
     prelude::frame::FrameTime,
-    shape::{cube::Cube, Geometry},
-    texture::{create_depth_textures, library::TextureFileCache},
+    shader::library::ShaderLibrary,
+    texture::{create_depth_textures, library::TextureManager},
 };
-use crate::{material::manager::MaterialManager, pipeline::cache::PipelineManager};
-use nalgebra::Vector3;
-use vecmath::mat4_id;
-use wgpu::{util::DeviceExt, Origin3d};
+use glyphon::Resolution;
+
+use wgpu::{util::DeviceExt, Color, DepthStencilState, Operations};
 use winit::window::Window;
 
 pub fn default_depth_stencil_state(format: Option<wgpu::TextureFormat>) -> wgpu::DepthStencilState {
@@ -37,32 +46,46 @@ pub fn default_depth_stencil_state(format: Option<wgpu::TextureFormat>) -> wgpu:
     }
 }
 
+pub struct LayoutBindings {
+    pub uniform: wgpu::BindGroupLayout,
+    pub texture: wgpu::BindGroupLayout,
+    pub color: wgpu::BindGroupLayout,
+}
+
 pub struct RenderContext {
-    pub material_manager: MaterialManager,
-    pub text_rendering_system: GlyphonManager,
-    pub pipeline_manager: Arc<PipelineManager>,
-    pub texture_manager: Arc<TextureFileCache>,
-    pub uniform_bind_group: Arc<wgpu::BindGroup>,
-    pub uniform_buffer: Arc<wgpu::Buffer>,
-    pub depth_stencil_state: wgpu::DepthStencilState,
-    pub camera: Camera,
-    pub mode: RenderMode,
-    pub debug: DebugMode,
-    pub frame: FrameTime,
-    pub frustum: Option<Frustum>,
     pub render_surface: RenderSurface,
-    pub last_mouse_position: winit::dpi::PhysicalPosition<f64>,
     pub adapter: Arc<wgpu::Adapter>,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
+
+    pub frame: FrameTime,
+    pub depth_texture: Option<Arc<wgpu::Texture>>,
+    pub depth_texture_view: Option<Arc<wgpu::TextureView>>,
+    pub frustum: Option<Frustum>,
+    pub depth_ops: Operations<f32>,
+    pub depth_stencil_state: DepthStencilState,
+    pub world: World,
+
+    pub camera: Camera,
+    pub last_mouse_position: winit::dpi::PhysicalPosition<f64>,
+
+    pub material_manager: MaterialManager,
+    pub pipeline_manager: PipelineManager,
+    pub texture_manager: TextureManager,
+
+    pub shader_manager: ShaderLibrary,
+    pub debug: DebugMode,
+    pub mode: RenderMode,
+    pub text_rendering_system: GlyphonManager,
+    pub ops: Operations<Color>,
+    pub color_bind_group: wgpu::BindGroup,
+    pub uniform_bind_group: wgpu::BindGroup,
+    pub uniform_bind_group_layout: wgpu::BindGroupLayout,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub color_bind_group_layout: wgpu::BindGroupLayout,
+    pub uniform_buffer: wgpu::Buffer,
+    pub color_uniform_buffer: wgpu::Buffer,
     pub window: Arc<Window>,
-    pub(crate) depth_texture: Option<Arc<wgpu::Texture>>,
-    pub(crate) depth_texture_view: Option<Arc<wgpu::TextureView>>,
-    pub uniform_bind_group_layout: Arc<wgpu::BindGroupLayout>,
-    pub texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
-    pub color_bind_group_layout: Arc<wgpu::BindGroupLayout>,
-    pub(crate) _target_fps: u64,
-    pub(crate) _frame_duration: Duration,
 }
 impl RenderContext {
     pub fn update_frustum(&mut self) {
@@ -96,30 +119,19 @@ impl RenderContext {
                     usage: wgpu::BufferUsages::INDEX,
                 });
 
-            let color = ColorUniform {
-                rgba: [1.0, 5.0, 5.0, 1.0],
-            };
-            let color_buffer = self
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Color Buffer"),
-                    contents: bytemuck::cast_slice(&[color]),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-            let color_bind_group =
-                BindingGroups::color(&self.device, &color_buffer, &self.color_bind_group_layout);
-
-            let pipeline = match self.pipeline_manager.get_pipeline("lines") {
+            let pipeline = match self
+                .pipeline_manager
+                .get_pipeline(LINE_LIST_COLORED_DEPTH_VIEW_PIPELINE_LABEL)
+            {
                 Some(lines) => lines,
                 None => {
-                    log_debug!("Pipeline 'Lines' not found");
+                    log_debug!("Pipeline not found");
                     return;
                 }
             };
 
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Lines"),
+                label: Some(LINE_LIST_COLORED_DEPTH_VIEW_PIPELINE_LABEL),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -134,7 +146,7 @@ impl RenderContext {
             });
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            render_pass.set_bind_group(1, &color_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.color_bind_group, &[]);
             render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
@@ -143,57 +155,44 @@ impl RenderContext {
         }
     }
 }
+
 impl RenderContext {
-    pub async fn new(window: Arc<Window>, mode: RenderMode, debug: DebugMode) -> Self {
-        let target_fps = 9000;
-        let frame_duration = Duration::from_secs_f64(1.0 / target_fps as f64);
-        let instance = get_instance().expect("Instance");
-        let adapter = get_adapter().expect("Adapter");
-        let device = get_device().expect("Device");
-        let queue = get_queue().expect("Queue");
-
-        let surface = instance
-            .create_surface(window.clone())
-            .expect("Create surface");
-
+    pub async fn new(
+        window: Arc<Window>,
+        mode: RenderMode,
+        debug: DebugMode,
+    ) -> Result<Self, AppError> {
+        let (adapter, device, queue, instance) = Self::initialize_graphics().await;
+        let surface = instance.create_surface(window.clone())?;
         let surface_config = default_surface_configuration(&surface, &adapter, &window);
+
+        let mut shader_manager = ShaderLibrary::new();
+        let mut pipeline_manager = PipelineManager::new();
+        let _ = Self::initialize_pipeline_manager(
+            &device,
+            surface_config.format,
+            &mut shader_manager,
+            &mut pipeline_manager,
+        )?;
+        let material_manager = MaterialManager::new();
+        let texture_manager = TextureManager::new(queue.clone(), device.clone());
+
+        let render_surface = RenderSurface::new(window.clone(), surface, surface_config);
+
+        let color_uniform_buffer = color_buffer(&device, UniformColor::default());
+        let color_bind_group = color_bind_group(
+            &device,
+            &color_uniform_buffer,
+            &color_bind_group_layout(&device),
+        );
+
+        let (uniform_group, uniform_buffer, layout_bindings) = Self::setup_uniforms(&device);
+
+        let uniform_bind_group = uniform_group;
+        let uniform_buffer = uniform_buffer;
+
         let camera = Camera::default();
-        let uniform_buffer = uniform_buffer(
-            &device,
-            &Uniforms {
-                model: ModelUniform { matrix: mat4_id() },
-                color: ColorUniform {
-                    rgba: [0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32],
-                },
-                view_projection: ViewProjectionMatrix {
-                    matrix: camera.view_projection_matrix().into(),
-                },
-            },
-        );
-
-        let uniform_bind_group = uniform_bind_group(
-            &device,
-            &uniform_buffer,
-            &uniform_bind_group_layout(&device),
-        );
-        let uniform_bind_group_layout = Arc::new(BindingLayouts::uniform(&device));
-        let texture_bind_group_layout = Arc::new(BindingLayouts::texture(&device));
-        let color_bind_group_layout = Arc::new(BindingLayouts::color(&device));
-        let pipeline_manager = Arc::new(
-            setup_pipeline_manager(
-                &device,
-                surface_config.format,
-                &uniform_bind_group_layout,
-                &texture_bind_group_layout,
-                &color_bind_group_layout,
-            )
-            .expect("Pipeline Manager"),
-        );
-        let mut texture_manager = TextureFileCache::new();
-
-        let mut material_manager = MaterialManager::new(pipeline_manager.clone(), &device);
-        let render_surface = RenderSurface::new(window.clone(), &device, &adapter, surface);
-
+        let frustum = Frustum::default();
         let text_rendering_system = GlyphonManager::new(
             &device,
             &queue,
@@ -201,116 +200,84 @@ impl RenderContext {
             default_depth_stencil_state(None),
         );
 
-        let _ = material_manager.create_material(
-            Geometry::Cube(Cube::new(25, 25, 25, Vector3::new(0.0, 0.0, 1.0))),
-            camera.view_projection_matrix(),
-            [0.0, 0.0, 0.0, 0.0],
-            "cube".into(),
-            None,
-        );
+        let world = World::new();
 
-        let _ = material_manager.set_material_texture(
-            "cube",
-            "static/images/missing.png",
-            &mut texture_manager,
-            surface_config.format,
-            wgpu::TextureDimension::D2,
-            1,
-            1,
-            1,
-            Origin3d::ZERO,
-            wgpu::TextureAspect::All,
-            0,
-            0,
-        );
-
-        if let Err(e) = texture_manager.write_to_queue(&queue).await {
-            log_error!("Failed to write texture to queue: {:?}", e);
-        }
-        RenderContext {
-            _target_fps: target_fps,
-            _frame_duration: frame_duration,
-            material_manager,
-            text_rendering_system,
-            uniform_bind_group: uniform_bind_group.into(),
-            uniform_buffer: uniform_buffer.into(),
-            camera,
-            frame: FrameTime::new(),
-            frustum: Some(Frustum::default()),
-            mode,
-            last_mouse_position: winit::dpi::PhysicalPosition::default(),
-            pipeline_manager,
-            render_surface,
-            depth_texture: None,
-            uniform_bind_group_layout,
-            texture_bind_group_layout,
-            color_bind_group_layout,
-            depth_texture_view: None,
+        Ok(RenderContext {
             adapter,
             device,
             queue,
-            window,
+            render_surface,
+            frame: FrameTime::new(),
+            depth_texture: None,
+            depth_texture_view: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 1.0,
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+            frustum: Some(frustum),
+            depth_ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            },
+            world,
+            camera,
+            last_mouse_position: winit::dpi::PhysicalPosition::default(),
+            material_manager,
+            pipeline_manager,
+            texture_manager,
+            shader_manager,
             debug,
-            texture_manager: texture_manager.into(),
+            mode,
+            text_rendering_system,
             depth_stencil_state: default_depth_stencil_state(None),
-        }
-    }
-    pub fn disable_depth_stencil(&mut self) {
-        self.depth_texture = None;
-        self.depth_texture_view = None;
+            window,
 
-        let state = false;
-        self.depth_stencil_state.depth_write_enabled = state;
-        self.text_rendering_system.set_use_depth(state);
-    }
-    pub fn enable_depth_stencil(&mut self) {
-        let (depth_texture, depth_texture_view) =
-            create_depth_textures(&self.device, &self.render_surface.surface_config);
-
-        self.depth_texture = Some(depth_texture.into());
-        self.depth_texture_view = Some(depth_texture_view.into());
-
-        let state = true;
-
-        self.depth_stencil_state.depth_write_enabled = state;
-        self.text_rendering_system.set_use_depth(state);
-    }
-
-    pub fn draw_debug(&mut self) {
-        self.text_rendering_system.draw_debug_info(
-            self.debug,
-            &self.frame,
-            self.frame.fps,
-            &self.camera,
-        );
+            uniform_bind_group_layout: layout_bindings.uniform,
+            texture_bind_group_layout: layout_bindings.texture,
+            color_bind_group_layout: layout_bindings.color,
+            uniform_bind_group,
+            uniform_buffer,
+            color_bind_group,
+            color_uniform_buffer,
+        })
     }
 
     pub fn set_render_mode(&mut self, render_mode: RenderMode) {
-        let inner_size = self.window.inner_size();
+        self.mode = render_mode;
         match render_mode {
-            RenderMode::Flat | RenderMode::WireNoDepth => {
-                self.camera.set_orthographic_projection(
-                    0.0,
-                    inner_size.width as f32,
-                    0.0,
-                    inner_size.height as f32,
-                    -1.0,
-                    1.0,
-                );
-                self.disable_depth_stencil();
-            }
-            RenderMode::Depth | RenderMode::WireWithDepth => {
-                self.camera.set_perspective_projection(
-                    std::f32::consts::FRAC_PI_2,
-                    16.0 / 9.0,
-                    1.0,
-                    100.0,
-                );
+            RenderMode::LineListDepthView | RenderMode::TriangleListDepthView => {
                 self.enable_depth_stencil();
+            }
+            RenderMode::LineListNoDepth | RenderMode::TriangleListNoDepth => {
+                self.disable_depth_stencil();
             }
         }
     }
 
+    pub fn resize(
+        render_surface: &mut RenderSurface,
+        text_rendering_system: &mut GlyphonManager,
+        new_width: u32,
+        new_height: u32,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        render_surface.resize(new_width, new_height, &device);
+        text_rendering_system.reconfigure(
+            &queue,
+            Resolution {
+                width: new_width,
+                height: new_height,
+            },
+        );
+    }
+}
+impl RenderContext {
     pub fn render_frame(&mut self) -> Result<(), AppError> {
         match self.render_surface.get_current_texture() {
             Ok(frame) => {
@@ -324,92 +291,83 @@ impl RenderContext {
                     device_binding.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                         label: Some("Render Encoder"),
                     });
-                let proj_matrix = self.camera.view_projection_matrix();
-
-                let (pipeline_label, use_depth) = match self.mode {
-                    RenderMode::Flat => ("flat", false),
-                    RenderMode::Depth => ("depth", true),
-                    RenderMode::WireNoDepth => ("wire_no_depth", false),
-                    RenderMode::WireWithDepth => ("wire", true),
-                };
-
-                let depth_stencil_attachment = if use_depth {
-                    self.depth_texture_view.as_ref().map(|depth_view| {
-                        wgpu::RenderPassDepthStencilAttachment {
-                            view: depth_view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(1.0),
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: Default::default(),
-                        }
-                    })
-                } else {
-                    None
-                };
 
                 let render_pass_desc = wgpu::RenderPassDescriptor {
-                    label: Some(pipeline_label),
+                    label: Some(self.mode.pipeline_label()),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &view,
                         resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.5,
-                                g: 0.5,
-                                b: 0.5,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
+                        ops: self.ops,
                     })],
-                    depth_stencil_attachment: depth_stencil_attachment.clone(),
-                    timestamp_writes: Default::default(),
-                    occlusion_query_set: Default::default(),
+                    depth_stencil_attachment: if self.mode.use_depth_stencil() {
+                        self.depth_texture_view.as_ref().map(|depth_view| {
+                            wgpu::RenderPassDepthStencilAttachment {
+                                view: depth_view,
+                                depth_ops: Some(self.depth_ops),
+                                stencil_ops: Default::default(),
+                            }
+                        })
+                    } else {
+                        None
+                    },
+                    ..Default::default()
                 };
 
-                if let Some(pipeline) = self.pipeline_manager.get_pipeline(pipeline_label) {
+                let pipeline = match self
+                    .pipeline_manager
+                    .get_pipeline(self.mode.pipeline_label())
+                {
+                    Some(pipe) => pipe,
+                    None => return Ok(()),
+                };
+
+                {
                     let mut render_pass = encoder.begin_render_pass(&render_pass_desc);
+                    render_pass.set_pipeline(pipeline);
 
-                    if let Some(material) = self.material_manager.materials().get("cube") {
-                        let model_matrix = material.geometry.model_matrix();
-                        queue_binding.write_buffer(
-                            &material.uniform_buffer,
-                            0,
-                            bytemuck::cast_slice(&[Uniforms {
-                                model: model_matrix.into(),
-                                view_projection: proj_matrix.into(),
-                                color: material.color.into(),
-                            }]),
-                        );
+                    self.world.query3::<Transform, Mesh, Material>(
+                        |_entity, transform, mesh, material| {
+                            if mesh.geometry.num_indices() > 0
+                                && mesh.geometry.vertex_buffer_data().len() > 0
+                            {
+                                let model_matrix = create_model_matrix(
+                                    transform.position,
+                                    transform.rotation,
+                                    transform.scale,
+                                );
 
-                        render_pass.set_pipeline(&pipeline);
-                        render_pass.set_bind_group(0, &material.uniform_bind_group, &[]);
-                        if let Some(texture_bind_group) = &material.texture_bind_group {
-                            render_pass.set_bind_group(1, &texture_bind_group, &[]);
-                        }
-                        render_pass.set_vertex_buffer(0, material.vertex_buffer.slice(..));
-                        render_pass.set_index_buffer(
-                            material.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
-                        render_pass.draw_indexed(0..material.geometry.num_indices(), 0, 0..1);
-                    }
-                }
+                                let proj_matrix = self.camera.view_projection_matrix();
 
-                if self.debug != DebugMode::None {
-                    self.text_rendering_system.render(
-                        &mut encoder,
-                        &self.device,
-                        &self.queue,
-                        &view,
-                        depth_stencil_attachment.as_ref(),
-                        &self.render_surface.surface_config,
+                                let uniform_data = Uniforms {
+                                    model: model_matrix.into(),
+                                    view_projection: proj_matrix.into(),
+                                    color: material.color.into(),
+                                };
+
+                                self.queue.write_buffer(
+                                    &self.uniform_buffer,
+                                    0,
+                                    bytemuck::cast_slice(&[uniform_data]),
+                                );
+                                render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+
+                                // if let Some(texture_bind_group) = &material.texture_id {
+                                //     render_pass.set_bind_group(1, texture_bind_group, &[]);
+                                // } else {
+                                //     render_pass.set_bind_group(1, &self.color_bind_group, &[]);
+                                // }
+                                // render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                                // render_pass.set_index_buffer(
+                                //     mesh.index_buffer.slice(..),
+                                //     wgpu::IndexFormat::Uint16,
+                                // );
+
+                                // render_pass.draw_indexed(0..mesh.indices_count, 0, 0..1);
+                            }
+                        },
                     );
                 }
-                if self.mode == RenderMode::Depth || self.mode == RenderMode::WireWithDepth {
-                    self.draw_frustum(&mut encoder, &view, depth_stencil_attachment.as_ref());
-                }
+
                 queue_binding.submit(Some(encoder.finish()));
                 frame.present();
                 self.text_rendering_system.clear_buffer();
@@ -420,22 +378,96 @@ impl RenderContext {
         }
         Ok(())
     }
+}
 
-    pub fn resize(&mut self, new_width: u32, new_height: u32, device: &wgpu::Device) {
-        self.render_surface.resize(new_width, new_height, &device);
+impl RenderContext {
+    async fn initialize_graphics() -> (
+        Arc<wgpu::Adapter>,
+        Arc<wgpu::Device>,
+        Arc<wgpu::Queue>,
+        Arc<wgpu::Instance>,
+    ) {
+        let instance = get_instance().expect("Instance");
+        let adapter = get_adapter().expect("Adapter");
+        let device = get_device().expect("Device");
+        let queue = get_queue().expect("Queue");
+        (adapter, device, queue, instance)
     }
 
-    pub fn change_material_color(
-        &mut self,
-        material_name: &str,
-        new_color: [f32; 4],
-        queue: &wgpu::Queue,
-    ) {
-        self.material_manager.set_material_color(
-            material_name,
-            new_color,
-            &queue,
-            self.camera.projection_matrix().into(),
+    pub fn initialize_pipeline_manager(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        shader_manager: &mut ShaderLibrary,
+        pipeline_manager: &mut PipelineManager,
+    ) -> Result<(), AppError> {
+        Ok(setup_pipeline_manager(
+            &device,
+            shader_manager,
+            pipeline_manager,
+            format,
+            BindingLayouts::uniform(&device),
+            BindingLayouts::texture(&device),
+            BindingLayouts::color(&device),
+        )?)
+    }
+
+    fn setup_uniforms(device: &wgpu::Device) -> (wgpu::BindGroup, wgpu::Buffer, LayoutBindings) {
+        let uniform_buffer = uniform_buffer(device, &Uniforms::default());
+        let uniform_bind_group_layout = uniform_bind_group_layout(device);
+        let uniform_bind_group =
+            uniform_bind_group(device, &uniform_buffer, &uniform_bind_group_layout);
+
+        (
+            uniform_bind_group,
+            uniform_buffer,
+            LayoutBindings {
+                uniform: uniform_bind_group_layout,
+                texture: BindingLayouts::texture(device),
+                color: BindingLayouts::color(device),
+            },
+        )
+    }
+}
+impl RenderContext {
+    pub fn change_material_color(&mut self, material_name: &str, new_color: [f32; 4]) {
+        let _ = self
+            .material_manager
+            .set_material_color(material_name, new_color);
+    }
+    pub fn draw_debug(&mut self) {
+        self.text_rendering_system.draw_debug_info(
+            self.debug,
+            &self.frame,
+            self.frame.fps,
+            &self.camera,
         );
+    }
+
+    pub fn disable_depth_stencil(&mut self) {
+        let inner_size = self.window.inner_size();
+        self.depth_texture = None;
+        self.depth_texture_view = None;
+        self.depth_stencil_state.depth_write_enabled = false;
+        self.camera.set_orthographic_projection(
+            0.0,
+            inner_size.width as f32,
+            0.0,
+            inner_size.height as f32,
+            -1.0,
+            1.0,
+        );
+        self.text_rendering_system.set_use_depth(false);
+    }
+
+    pub fn enable_depth_stencil(&mut self) {
+        let (depth_texture, depth_texture_view) =
+            create_depth_textures(&self.device, &self.render_surface.surface_config);
+        self.depth_texture = Some(Arc::new(depth_texture));
+        self.depth_texture_view = Some(Arc::new(depth_texture_view));
+        self.depth_stencil_state.depth_write_enabled = true;
+
+        self.camera
+            .set_perspective_projection(std::f32::consts::FRAC_PI_2, 16.0 / 9.0, 1.0, 100.0);
+        self.text_rendering_system.set_use_depth(true);
     }
 }

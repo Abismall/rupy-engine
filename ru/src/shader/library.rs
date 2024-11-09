@@ -1,35 +1,21 @@
-use super::{RupyShader, ShaderModuleBuilder};
+use super::{RupyShader, ShaderModules};
 use crate::core::error::AppError;
 use crate::core::files::FileSystem;
-use crate::log_debug;
 
-use std::path::PathBuf;
 use std::{collections::HashMap, sync::Arc};
 
-const SHADERS_DIR_NAME: &str = "shaders";
 const WGSL_SHADER_EXT: &str = "wgsl";
-
+#[derive(Debug)]
 pub struct ShaderLibrary {
     pub shaders: HashMap<String, Arc<RupyShader>>,
-    pub builder: ShaderModuleBuilder,
+    pub builder: ShaderModules,
 }
 
 impl ShaderLibrary {
     pub fn new() -> Self {
-        let builder = ShaderModuleBuilder::new();
+        let builder = ShaderModules::new();
         let shaders = HashMap::with_capacity(50);
         Self { builder, shaders }
-    }
-    fn dir_not_found<T>() -> Result<T, AppError> {
-        Err(AppError::FileNotFoundError(
-            "Shaders directory not found".into(),
-        ))
-    }
-    fn find_shader_dir_path() -> std::result::Result<PathBuf, AppError> {
-        match FileSystem::find_from_project_dir(SHADERS_DIR_NAME) {
-            Some(dir) => Ok(dir),
-            None => return ShaderLibrary::dir_not_found(),
-        }
     }
 
     pub async fn async_load_shaders(&mut self, device: &wgpu::Device) -> Result<(), AppError> {
@@ -55,7 +41,6 @@ impl ShaderLibrary {
         match self.shaders.get(path) {
             Some(cached) => Ok(Arc::clone(cached)),
             None => {
-                log_debug!("New resource created!");
                 if let Err(e) = self.insert_shader_from_path(device, path, vs_main, fs_main) {
                     Err(e)
                 } else {
@@ -71,7 +56,7 @@ impl ShaderLibrary {
         vs_main: String,
         fs_main: String,
     ) -> Result<RupyShader, AppError> {
-        let shader = ShaderModuleBuilder::from_path_string(device, shader_path, vs_main, fs_main)?;
+        let shader = ShaderModules::from_path_string(device, shader_path, vs_main, fs_main)?;
         self.shaders
             .insert(shader_path.to_string(), Arc::new(shader.clone()));
         Ok(shader)
@@ -79,7 +64,7 @@ impl ShaderLibrary {
 
     pub fn try_list_shader_file_paths() -> Result<Vec<String>, AppError> {
         let path_bufs = FileSystem::list_files_with_extension(
-            &ShaderLibrary::find_shader_dir_path()?,
+            &FileSystem::get_shaders_dir()?,
             WGSL_SHADER_EXT,
         )?;
         let paths: Vec<String> = path_bufs
@@ -91,10 +76,8 @@ impl ShaderLibrary {
     }
 }
 pub fn try_list_shader_file_paths() -> std::result::Result<Vec<String>, AppError> {
-    let path_bufs = FileSystem::list_files_with_extension(
-        &ShaderLibrary::find_shader_dir_path()?,
-        WGSL_SHADER_EXT,
-    )?;
+    let path_bufs =
+        FileSystem::list_files_with_extension(&FileSystem::get_shaders_dir()?, WGSL_SHADER_EXT)?;
     let paths: Vec<String> = path_bufs
         .iter()
         .filter_map(|path| path.to_str().map(|s| s.to_string()))

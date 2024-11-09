@@ -131,17 +131,15 @@ def main():
         VENV_DIR = os.path.join(PROJECT_ROOT_DIR, 'venv')
 
         requirements = os.path.join(PROJECT_ROOT_DIR, 'requirements.txt')
-        print(requirements)
         config = load_project_config(PROJECT_ROOT_DIR, PYPROJECT)
-        print(config)
         main_script = os.path.join(PROJECT_ROOT_DIR, "main.py")
         min_python_version = load_min_python_version(config, PYENGINE)
 
-        create_virtual_environment(VENV_DIR, PYTHON_EXEC)
-        activate_virtual_environment(VENV_DIR)
+        # create_virtual_environment(VENV_DIR, PYTHON_EXEC)
+        # activate_virtual_environment(VENV_DIR)
 
         check_python_version(min_python_version)
-        install_dependencies(requirements)
+        # install_dependencies(requirements)
         create_dotenv(config, PYENGINE)
         start_application(sys.argv[1:], main_script)
     except PyEngineError as e:

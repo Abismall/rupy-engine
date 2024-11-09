@@ -18,26 +18,22 @@ impl<T: Component> ComponentVec<T> {
             data: std::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
-
+}
+impl<T: Component> ComponentVec<T> {
     pub fn insert(&self, entity: Entity, component: T) -> Result<(), String> {
-        match self.data.write() {
-            Ok(mut data) => {
-                data.insert(entity, component);
-                Ok(())
-            }
-            Err(e) => Err(format!("Failed to acquire write lock: {}", e)),
-        }
+        let mut data = self.data.write().map_err(|e| e.to_string())?;
+        data.insert(entity, component);
+        Ok(())
     }
 
     pub fn get(&self, entity: Entity) -> Option<T>
     where
         T: Clone,
     {
-        let data = self.data.read().unwrap();
+        let data = self.data.read().ok()?;
         data.get(&entity).cloned()
     }
 }
-
 impl<T: Component> ComponentStorage for ComponentVec<T> {
     fn remove(&self, entity: Entity) {
         let mut data = self.data.write().unwrap();

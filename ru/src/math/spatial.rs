@@ -2,6 +2,7 @@ use std::fmt;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use nalgebra::clamp;
+use serde::{Deserialize, Serialize};
 
 use super::lerp;
 
@@ -9,7 +10,7 @@ pub trait GetValue {
     fn get(&self) -> u32;
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Width(pub u32);
 
 impl GetValue for Width {
@@ -48,7 +49,7 @@ impl fmt::Display for Width {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Height(pub u32);
 
 impl GetValue for Height {
@@ -87,7 +88,7 @@ impl fmt::Display for Height {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Depth(u32);
 
 impl GetValue for Depth {
@@ -120,7 +121,7 @@ impl From<Depth> for f32 {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Size2D {
     pub width: Width,
     pub height: Height,
@@ -161,7 +162,7 @@ impl Size2D {
 }
 
 /// 3D size representation with width, height, and depth.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Size3D {
     pub size_2d: Size2D,
     pub depth: Depth,

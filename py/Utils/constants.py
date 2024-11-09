@@ -18,8 +18,8 @@ SIZE_EXTRA_LARGE = "600x900"    # Extra large size: 600 pixels wide, 900 pixels 
 # ========================
 # LAUNCH OPTIONS MENU
 # ========================
-LAUNCH_OPTIONS_MENU = "launch_options_menu"
-LAUNCH_OPTIONS_MENU_GEOMETRY = SIZE_MEDIUM
+LAUNCHER_MENU = "launcher_menu"
+SCENE_MENU = "scenes_menu"
 
 # ========================
 # LOGGER CONFIGURATION
@@ -54,7 +54,7 @@ CHILD_PROCESS_ERROR_MSG = "Error in child process execution."
 APP_INIT_SIGNAL = "app:init"
 APP_START_SIGNAL = "app:start"
 APP_UPDATE_SIGNAL = "app:state:update"
-APP_RENDER_SIGNAL = "app:render"
+APP_LAUNCH_ENGINE_SIGNAL = "app:engine:start"
 APP_SHUTDOWN_SIGNAL = "app:shutdown"
 ENV_RELOAD = "env:reload"
 INPUT_UPDATE_START_SIGNAL = "input:update:start"

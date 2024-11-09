@@ -1,4 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
+use std::env;
 use std::hash::{Hash, Hasher};
 
 use winit::{
@@ -62,4 +63,24 @@ pub fn calculate_hashes<T: Hash>(item: &Vec<T>) -> u64 {
 }
 pub fn string_to_u64(s: &str) -> u64 {
     calculate_hash(&s.to_string())
+}
+
+pub fn get_window_attributes() -> (u32, u32, i32, i32) {
+    let width: u32 = env::var("RUPY_ENGINE_WINDOW_WIDTH")
+        .ok()
+        .and_then(|val| val.parse().ok())
+        .unwrap_or(800);
+    let height: u32 = env::var("RUPY_ENGINE_WINDOW_HEIGHT")
+        .ok()
+        .and_then(|val| val.parse().ok())
+        .unwrap_or(600);
+    let x: i32 = env::var("RUPY_ENGINE_WINDOW_X_ANCHOR")
+        .ok()
+        .and_then(|val| val.parse().ok())
+        .unwrap_or(100);
+    let y: i32 = env::var("RUPY_ENGINE_WINDOW_Y_ANCHOR")
+        .ok()
+        .and_then(|val| val.parse().ok())
+        .unwrap_or(100);
+    (width, height, x, y)
 }

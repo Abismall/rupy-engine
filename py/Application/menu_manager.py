@@ -1,13 +1,17 @@
-import threading
 import time
-from UI.menus.launch_options_menu import LaunchOptionsMenu
-from Utils.strings import convert_underscore_to_title
-from Error.base import PyEngineError
-from Utils.constants import LAUNCH_OPTIONS_MENU
-from Utils.constants import LAUNCH_OPTIONS_MENU_GEOMETRY
-from .signal import Signals, SignalBus
-from typing import Any, Callable, Dict
+from typing import Callable
+import yaml
+import os
 import tkinter as tk
+from tkinter import ttk
+from queue import Queue
+import threading
+import yaml
+from Error.base import PyEngineError
+from Utils.constants import LAUNCHER_MENU, SCENE_MENU
+from UI.launcher import LaunchOptionsMenu
+from UI.scenes import SceneFilesMenu
+from .signal import Signals, SignalBus
 
 
 class MenuThread(threading.Thread):
@@ -22,7 +26,6 @@ class MenuThread(threading.Thread):
                 self._target_function()
                 time.sleep(0.1)
         except Exception as e:
-            # Log error and raise a general threading error
             raise PyEngineError("THREADING_ERROR") from e
 
     def stop(self):
@@ -30,96 +33,81 @@ class MenuThread(threading.Thread):
 
 
 class MenuManager:
-    def __init__(self, root: tk.Tk, signal_bus: SignalBus, env_file_path: str = ".env"):
+    def __init__(self, root: tk.Tk, signal_bus: SignalBus, scenes_directory: str = "./ru/static/scenes", env_file_path=".env"):
         self.root = root
         self.signal_bus = signal_bus
+        self.scenes_directory = scenes_directory
         self.env_file_path = env_file_path
-        self.menus: Dict[str, Dict[str, Any]] = {}
+        self.menus = {}
+        self.scene_queue = Queue()
+
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.grid(row=0, column=0, sticky="nsew")
+
+        self.launch_options_menu = LaunchOptionsMenu(
+            self.notebook, signal_bus, env_file_path)
+        self.scene_files_menu = SceneFilesMenu(
+            self.notebook, signal_bus, scenes_directory)
+
+        self.notebook.add(self.launch_options_menu, text="Launcher")
+        self.notebook.add(self.scene_files_menu, text="Scenes")
 
         self.subscribe_signals()
+        self.check_scene_queue()
 
     def subscribe_signals(self):
-        try:
-
-            self.signal_bus.subscribe(
-                Signals.MENU_OPEN.value, self.handle_menu_open)
-            self.signal_bus.subscribe(
-                Signals.MENU_CLOSE.value, self.handle_menu_close)
-        except Exception as e:
-            raise PyEngineError("CONFIG_LOAD_FAILED") from e
+        self.signal_bus.subscribe(Signals.MENU_OPEN, self.handle_menu_open)
+        self.signal_bus.subscribe(Signals.MENU_CLOSE, self.handle_menu_close)
 
     def handle_menu_open(self, channel: str, menu_name: str):
-        try:
-            if menu_name not in self.menus or not self.menus[menu_name]["open"]:
-                self.open_menu(menu_name)
-        except KeyError:
-            raise PyEngineError("RESOURCE_NOT_AVAILABLE")
-        except Exception as e:
-            raise PyEngineError("UNKNOWN_ERROR") from e
+        if menu_name == LAUNCHER_MENU:
+            self.show_menu_tab(self.launch_options_menu)
+        elif menu_name == SCENE_MENU:
+            self.show_menu_tab(self.scene_files_menu)
 
     def handle_menu_close(self, channel: str, menu_name: str):
-        try:
-            if menu_name in self.menus and self.menus[menu_name]["open"]:
-                self.menus[menu_name]["open"] = False
-                if hasattr(self.menus[menu_name]["thread"], "stop") and callable(self.menus[menu_name]["thread"].stop):
-                    self.menus[menu_name]["thread"].stop()
-                else:
-                    raise PyEngineError("CHILD_PROCESS_ERROR")
-        except KeyError:
-            raise PyEngineError("RESOURCE_NOT_AVAILABLE")
-        except Exception as e:
-            raise PyEngineError("UNKNOWN_ERROR") from e
+        if menu_name == LAUNCHER_MENU:
+            self.notebook.hide(self.launch_options_menu)
+        elif menu_name == SCENE_MENU:
+            self.notebook.hide(self.scene_files_menu)
 
-    def open_menu(self, menu_name: str):
-        try:
-            if menu_name == LAUNCH_OPTIONS_MENU:
-                self.launch_menu_thread(menu_name, self.run_options_menu)
-        except Exception as e:
-            raise PyEngineError("UNKNOWN_ERROR") from e
+    def show_menu_tab(self, menu_frame):
+        """Select the specific menu tab in the notebook."""
+        index = self.notebook.index(menu_frame)
+        self.notebook.select(index)
 
-    def launch_menu_thread(self, menu_name: str, target_function: Callable):
-        try:
-            thread = MenuThread(target=target_function, daemon=True)
-            self.menus.update({
-                menu_name: {
-                    "open": True,
-                    "thread": thread
-                }
-            })
-            if hasattr(self.menus[menu_name]["thread"], "start") and callable(self.menus[menu_name]["thread"].start):
-                self.menus[menu_name]["thread"].start()
-            else:
-                raise PyEngineError("CHILD_PROCESS_ERROR")
-        except Exception as e:
-            raise PyEngineError("THREADING_ERROR") from e
+    def check_scene_queue(self):
+        """Check the queue for scenes loaded by the background thread and update the scene tab if available."""
+        if not self.scene_queue.empty():
+            self.scene_files_menu.scenes = self.scene_queue.get_nowait()
 
-    def run_options_menu(self):
-        try:
-            tk_root = tk.Tk()
-            tk_root.title(convert_underscore_to_title(LAUNCH_OPTIONS_MENU))
-            tk_root.geometry(LAUNCH_OPTIONS_MENU_GEOMETRY)
+        self.root.after(100, self.check_scene_queue)
 
-            tk_root.protocol("WM_DELETE_WINDOW", lambda: self.signal_bus.publish(
-                Signals.MENU_CLOSE.value, LAUNCH_OPTIONS_MENU))
+    def load_scene_files(self, directory_path: str):
+        scenes = []
+        if not os.path.exists(directory_path):
+            print(f"Directory not found: {directory_path}")
+            return
 
-            _ = LaunchOptionsMenu(
-                root=tk_root, signal_bus=self.signal_bus, env_file_path=self.env_file_path)
+        for scene_folder in os.listdir(directory_path):
+            scene_path = os.path.join(directory_path, scene_folder)
+            if os.path.isdir(scene_path):
+                for filename in os.listdir(scene_path):
+                    if filename.endswith(".rupy"):
+                        file_path = os.path.join(scene_path, filename)
+                        try:
+                            with open(file_path, 'r') as file:
+                                scene_data = yaml.safe_load(file)
+                                title = scene_data.get("name", "Unnamed Scene")
+                                photo_path = os.path.join(
+                                    scene_path, scene_data.get("photo", ""))
+                                if os.path.exists(photo_path):
+                                    scenes.append(
+                                        {"title": title, "photo_path": photo_path})
+                                else:
+                                    print(f"Warning: Photo not found for scene '{
+                                          title}' in {scene_folder}")
+                        except Exception as e:
+                            print(f"Error loading {filename}: {e}")
 
-            while self.menus[LAUNCH_OPTIONS_MENU]["open"]:
-                try:
-                    tk_root.update_idletasks()
-                    tk_root.update()
-                    time.sleep(0.1)
-                except tk.TclError:
-                    break
-        except Exception as e:
-            raise PyEngineError("UI_ERROR") from e
-        finally:
-            tk_root.destroy()
-
-    def close_all_menus(self):
-        try:
-            for menu_name in self.menus.keys():
-                self.signal_bus.publish(Signals.MENU_CLOSE.value, menu_name)
-        except Exception as e:
-            raise PyEngineError("UNKNOWN_ERROR") from e
+        self.scene_queue.put(scenes)

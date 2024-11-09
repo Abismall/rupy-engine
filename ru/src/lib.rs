@@ -5,12 +5,11 @@ pub mod ecs;
 pub mod events;
 pub mod graphics;
 pub mod input;
-pub mod material;
 pub mod math;
 pub mod pipeline;
+pub mod scene;
 pub mod shader;
 pub mod shape;
-
 pub mod texture;
 pub mod traits;
 pub mod ui;

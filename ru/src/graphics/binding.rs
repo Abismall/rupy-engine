@@ -4,7 +4,7 @@ use wgpu::{
     BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, Buffer, Device, ShaderStages,
 };
 
-use crate::ecs::components::uniform::{ColorUniform, Uniforms};
+use crate::ecs::components::uniform::{UniformColor, Uniforms};
 
 pub fn uniform_bind_group_layout<'a>(device: &Device) -> wgpu::BindGroupLayout {
     let uniform_visibility = wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT;
@@ -19,7 +19,7 @@ pub fn uniform_bind_group_layout<'a>(device: &Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some(BindingGroups::UNIFORMS_LABEL),
         entries: &[bind_group_layout_entry(
-            BindingLayouts::SAMPLER_BINDING.into(),
+            BindingLayouts::UNIFORMS_BINDING.into(),
             uniform_visibility,
             uniform_binding_type,
             count,
@@ -131,7 +131,7 @@ pub fn color_bind_group_layout(device: &Device) -> wgpu::BindGroupLayout {
     let color_binding_type = wgpu::BindingType::Buffer {
         ty: wgpu::BufferBindingType::Uniform,
         has_dynamic_offset: dynamic_offset,
-        min_binding_size: NonZero::new(mem::size_of::<ColorUniform>() as u64),
+        min_binding_size: NonZero::new(mem::size_of::<UniformColor>() as u64),
     };
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some(BindingGroups::COLOR_LABEL),

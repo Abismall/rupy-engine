@@ -16,12 +16,10 @@ pub struct RenderSurface {
 impl RenderSurface {
     pub fn new(
         window: Arc<Window>,
-        device: &Device,
-        adapter: &Adapter,
+
         surface: Surface<'static>,
+        surface_config: SurfaceConfiguration,
     ) -> Self {
-        let surface_config = default_surface_configuration(&surface, adapter, &window);
-        configure_surface(&surface, device, &surface_config);
         Self {
             surface,
             surface_config,
@@ -68,16 +66,14 @@ pub fn default_surface_configuration(
 ) -> SurfaceConfiguration {
     let surface_size = window_inner_size_to_vector2(window);
     let surface_caps = surface.get_capabilities(adapter);
-    let format = coalesce_format(&surface_caps);
-    log_debug!("{:?}", format);
     surface_configuration(
         coalesce_format(&surface_caps),
         surface_size.x,
         surface_size.y,
-        PresentMode::Mailbox,
+        PresentMode::Fifo,
         surface_caps.alpha_modes[0],
         TextureUsages::RENDER_ATTACHMENT,
-        (&[format]).to_vec(),
+        (&[]).to_vec(),
         1,
     )
 }

@@ -132,6 +132,51 @@ impl Default for Camera {
         )
     }
 }
+
+impl fmt::Display for Camera {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Camera {{
+            Position: ({:.2}, {:.2}, {:.2}),
+            Target: ({:.2}, {:.2}, {:.2}),
+            Up: ({:.2}, {:.2}, {:.2}),
+            Aspect Ratio: {:.2},
+            FOV Y: {:.2} degrees,
+            Near: {:.2},
+            Far: {:.2},
+            Yaw: {:.2} radians,
+            Pitch: {:.2} radians,
+            Distance: {:.2},
+            Is Panning: {},
+            Move Speed: {:.2},
+            Acceleration: {:.2}
+            }}",
+            self.position.x,
+            self.position.y,
+            self.position.z,
+            self.target.x,
+            self.target.y,
+            self.target.z,
+            self.up.x,
+            self.up.y,
+            self.up.z,
+            self.aspect_ratio,
+            self.fov_y.to_degrees(),
+            self.near,
+            self.far,
+            self.yaw,
+            self.pitch,
+            self.distance,
+            self.is_panning,
+            self.move_speed,
+            self.accesseleration
+        )
+    }
+}
+
+use std::fmt;
+
 use nalgebra::{Matrix4, Point3, Vector3};
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta};
 use winit::keyboard::KeyCode;

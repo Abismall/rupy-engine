@@ -17,9 +17,9 @@ impl RupyShader {
         &self.source
     }
 }
-
-pub struct ShaderModuleBuilder;
-impl ShaderModuleBuilder {
+#[derive(Debug)]
+pub struct ShaderModules;
+impl ShaderModules {
     pub fn new() -> Self {
         Self
     }
@@ -103,34 +103,7 @@ pub fn get_component_count(data_type: DataType) -> u32 {
         DataType::None => panic!("Invalid DataType: None"),
     }
 }
-#[derive(Debug)]
-pub struct Mesh {
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub index_count: usize,
-}
 
-impl Mesh {
-    pub fn new(device: &wgpu::Device, vertices: &[u32], indices: &[u16]) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        Mesh {
-            vertex_buffer,
-            index_buffer,
-            index_count: indices.len(),
-        }
-    }
-}
 pub fn shader_data_type_size(data_type: DataType) -> u32 {
     match data_type {
         DataType::Float => 4,

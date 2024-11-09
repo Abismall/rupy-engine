@@ -33,6 +33,10 @@ ERROR_MESSAGES = {
         "category": ErrorCategory.GENERAL,
         "message": "Referenced a variable before assignment.",
     },
+    "RU_DIRECTORY_NOT_FOUND": {  # New error case
+        "category": ErrorCategory.IO,
+        "message": "The 'ru' directory could not be found in any parent directories.",
+    },
 }
 
 

@@ -1,0 +1,53 @@
+name: "test"
+photo: "./happy-test-screen.png"
+entities:
+  - id: 1
+    components:
+      transform:
+        position: [1.0, 1.0, 1.0]
+        rotation:
+          [
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+          ]
+        scale:
+          [
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+          ]
+      material:
+        name: "cube"
+        color: [1.0, 0.5, 0.2, 1.0]
+        width: 40
+        height: 40
+        depth: 40
+        texture_file_path: "missing.png"
+  - id: 2
+    components:
+      transform:
+        position: [1.0, 1.0, 1.0]
+        rotation:
+          [
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+          ]
+        scale:
+          [
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+          ]
+      material:
+        name: "triangle"
+        color: [0.2, 0.8, 0.2, 1.0]
+        width: 40
+        height: 40
+        depth: 20
+        texture_file_path: "triangle.png"

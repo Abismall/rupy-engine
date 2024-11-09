@@ -32,15 +32,6 @@ pub enum FileType {
 }
 pub struct FileSystem;
 impl FileSystem {
-    pub fn cargo_manifest_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    }
-
-    pub fn find_from_project_dir(dir_name: &str) -> Option<PathBuf> {
-        let manifest_dir = FileSystem::cargo_manifest_dir();
-        Self::find_directory_recursive(&manifest_dir, dir_name)
-    }
-
     fn find_directory_recursive(path: &Path, dir_name: &str) -> Option<PathBuf> {
         if let Ok(entries) = fs::read_dir(path) {
             for entry in entries.flatten() {
@@ -57,10 +48,41 @@ impl FileSystem {
         }
         None
     }
+    pub fn get_static_dir() -> Result<PathBuf, AppError> {
+        std::env::var("RUPY_ENGINE_STATIC_DIR")
+            .map(PathBuf::from)
+            .map_err(|e| AppError::ConfigError(e.to_string()))
+    }
+    pub fn get_scenes_dir() -> Result<PathBuf, AppError> {
+        Ok(FileSystem::join_paths([
+            FileSystem::get_static_dir()?,
+            "scenes".into(),
+        ]))
+    }
+    pub fn get_images_dir() -> Result<PathBuf, AppError> {
+        std::env::var("RUPY_ENGINE_IMAGES_DIR")
+            .map(PathBuf::from)
+            .map_err(|e| AppError::ConfigError(e.to_string()))
+    }
+
+    pub fn get_shaders_dir() -> Result<PathBuf, AppError> {
+        std::env::var("RUPY_ENGINE_SHADERS_DIR")
+            .map(PathBuf::from)
+            .map_err(|e| AppError::ConfigError(e.to_string()))
+    }
+    pub fn get_image_file_path(file_name: &str) -> Result<PathBuf, AppError> {
+        Ok(FileSystem::get_images_dir()?.join(file_name))
+    }
+
+    pub fn get_shader_file_path(file_name: &str) -> Result<PathBuf, AppError> {
+        Ok(FileSystem::get_shaders_dir()?.join(file_name))
+    }
+
     pub fn resolve_static_path(path: &str) -> Result<PathBuf, AppError> {
         let resolved_path = fs::canonicalize(PathBuf::from(path))?;
         Ok(resolved_path)
     }
+
     pub fn image_open(path: &Path) -> Result<DynamicImage, image::ImageError> {
         match image::open(path) {
             Ok(image) => Ok(image),
@@ -121,7 +143,7 @@ impl FileSystem {
         }
         Ok(files)
     }
-    pub fn load_image_file(file_path: &str) -> Result<DynamicImage, AppError> {
+    pub fn load_image_file(file_path: &PathBuf) -> Result<DynamicImage, AppError> {
         match image::open(file_path) {
             Ok(texture) => Ok(texture),
             Err(e) => {
@@ -129,11 +151,6 @@ impl FileSystem {
                 Err(AppError::ImageError(e))
             }
         }
-    }
-    pub fn append_to_cargo_dir(path: &str) -> String {
-        let mut cargo_manifest_dir = FileSystem::cargo_manifest_dir();
-        cargo_manifest_dir.push(path);
-        cargo_manifest_dir.display().to_string()
     }
 
     pub fn list_files_with_extension<P: AsRef<Path>, E: AsRef<OsStr>>(

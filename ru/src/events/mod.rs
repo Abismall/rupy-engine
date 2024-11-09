@@ -1,7 +1,7 @@
 pub mod proxy;
 use winit::event::{Modifiers, MouseButton};
 
-use crate::texture::TextureFileDescriptor;
+use crate::texture::{config::TextureConfig, file::TextureFile};
 
 #[derive(Debug)]
 pub enum RupyAppEvent {
@@ -113,6 +113,6 @@ pub enum RupyAppEvent {
 }
 #[derive(Debug)]
 pub enum WorkerTaskCompletion {
-    LoadTextureFiles(Vec<TextureFileDescriptor>),
+    LoadTextureFiles(Vec<TextureConfig>),
     LoadShaderFiles(Vec<String>),
 }

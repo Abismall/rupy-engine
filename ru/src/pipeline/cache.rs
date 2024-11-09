@@ -1,8 +1,15 @@
-use super::create_render_pipeline;
 use super::state::{ColorTargetConfig, PrimitiveStateConfig};
+use super::{
+    line_list_colored_with_depth, line_list_colored_with_no_depth, line_list_textured_with_depth,
+    line_list_textured_with_no_depth, triangle_list_colored_with_depth,
+    triangle_list_colored_with_no_depth, triangle_list_textured_with_depth,
+    triangle_list_textured_with_no_depth,
+};
 use crate::core::error::AppError;
 use crate::log_debug;
-use crate::shader::create_shader_modules;
+use crate::pipeline::create_render_pipeline;
+use crate::shader::library::ShaderLibrary;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use wgpu::{
@@ -10,7 +17,7 @@ use wgpu::{
     RenderPipeline,
 };
 use wgpu::{ShaderModule, TextureFormat};
-
+#[derive(Debug)]
 pub struct PipelineManager {
     pipelines: HashMap<String, Arc<RenderPipeline>>,
 }
@@ -26,7 +33,7 @@ impl PipelineManager {
         &mut self,
         name: String,
         device: &Device,
-        swapchain_format: TextureFormat,
+        texture_format: TextureFormat,
         vertex_shader: &ShaderModule,
         fragment_shader: &ShaderModule,
         depth_stencil: Option<&wgpu::DepthStencilState>,
@@ -37,7 +44,7 @@ impl PipelineManager {
         let render_pipeline = create_render_pipeline(
             device,
             &name,
-            swapchain_format,
+            texture_format,
             bind_group_layouts,
             vertex_shader,
             fragment_shader,
@@ -53,14 +60,13 @@ impl PipelineManager {
         &mut self,
         name: String,
         device: &Device,
-        swapchain_format: TextureFormat,
+        texture_format: TextureFormat,
         vertex_shader: &ShaderModule,
         fragment_shader: &ShaderModule,
         depth_stencil: Option<wgpu::DepthStencilState>,
         primitive_state_config: PrimitiveStateConfig,
         color_target_config: ColorTargetConfig,
-        uniform_bind_group_layout: Arc<wgpu::BindGroupLayout>,
-        texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
+        bind_group_layouts: &[&BindGroupLayout],
     ) -> std::option::Option<Arc<wgpu::RenderPipeline>> {
         if let Some(existing_pipeline) = self.pipelines.get(&name) {
             return Some(existing_pipeline.clone());
@@ -69,8 +75,8 @@ impl PipelineManager {
         let render_pipeline = Arc::new(create_render_pipeline(
             device,
             &name,
-            swapchain_format,
-            &[&uniform_bind_group_layout, &texture_bind_group_layout],
+            texture_format,
+            bind_group_layouts,
             vertex_shader,
             fragment_shader,
             depth_stencil.as_ref(),
@@ -112,149 +118,156 @@ impl PipelineManager {
 
 pub fn setup_pipeline_manager(
     device: &Device,
-    swapchain_format: TextureFormat,
-    uniform_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-    texture_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-    color_bind_group_layout: &Arc<wgpu::BindGroupLayout>,
-) -> Result<PipelineManager, AppError> {
-    let mut pipeline_manager = PipelineManager::new();
-
-    let (vertex_shader, fragment_shader) = create_shader_modules(
+    shader_manager: &mut ShaderLibrary,
+    pipeline_manager: &mut PipelineManager,
+    texture_format: TextureFormat,
+    uniform_bind_group_layout: wgpu::BindGroupLayout,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    color_bind_group_layout: wgpu::BindGroupLayout,
+) -> Result<(), AppError> {
+    triangle_list_textured_with_depth(
+        pipeline_manager,
+        shader_manager,
         device,
-        "static/shaders/lit_vertex.wgsl",
-        "static/shaders/lit_fragment.wgsl",
-    )?;
-    let (frustum_vert, frustum_frag) = create_shader_modules(
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
+    );
+    triangle_list_textured_with_no_depth(
+        pipeline_manager,
+        shader_manager,
         device,
-        "static/shaders/frustum_vertex.wgsl",
-        "static/shaders/frustum_fragment.wgsl",
-    )?;
-
-    let depth_stencil_state = Some(wgpu::DepthStencilState {
-        format: wgpu::TextureFormat::Depth32Float,
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less,
-        stencil: wgpu::StencilState::default(),
-        bias: wgpu::DepthBiasState::default(),
-    });
-
-    pipeline_manager.add_pipeline(
-        "depth".to_owned(),
-        device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        depth_stencil_state.as_ref(),
-        &PrimitiveStateConfig::TriangleList,
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
     );
 
-    pipeline_manager.add_pipeline(
-        "flat".to_owned(),
+    line_list_textured_with_depth(
+        pipeline_manager,
+        shader_manager,
         device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        None,
-        &PrimitiveStateConfig::TriangleList,
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
+    );
+    line_list_textured_with_no_depth(
+        pipeline_manager,
+        shader_manager,
+        device,
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
     );
 
-    pipeline_manager.add_pipeline(
-        "wire".to_owned(),
+    triangle_list_colored_with_depth(
+        pipeline_manager,
+        shader_manager,
         device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        depth_stencil_state.as_ref(),
-        &PrimitiveStateConfig::Custom {
-            topology: wgpu::PrimitiveTopology::LineList,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
-            polygon_mode: wgpu::PolygonMode::Line,
-        },
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
+    );
+    triangle_list_colored_with_no_depth(
+        pipeline_manager,
+        shader_manager,
+        device,
+        texture_format,
+        &uniform_bind_group_layout,
+        &texture_bind_group_layout,
     );
 
-    pipeline_manager.add_pipeline(
-        "wire_no_depth".to_owned(),
+    line_list_colored_with_depth(
+        pipeline_manager,
+        shader_manager,
         device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        None,
-        &PrimitiveStateConfig::Custom {
-            topology: wgpu::PrimitiveTopology::LineList,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
-            polygon_mode: wgpu::PolygonMode::Line,
-        },
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
+        texture_format,
+        &uniform_bind_group_layout,
+        &color_bind_group_layout,
+    );
+    line_list_colored_with_no_depth(
+        pipeline_manager,
+        shader_manager,
+        device,
+        texture_format,
+        &uniform_bind_group_layout,
+        &color_bind_group_layout,
     );
 
-    pipeline_manager.add_pipeline(
-        "points".to_owned(),
-        device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        depth_stencil_state.as_ref(),
-        &PrimitiveStateConfig::PointList,
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
-    );
+    Ok(())
+}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
+pub enum RenderPipelineDepthOption {
+    WithDepth,
+    WithNoDepth,
+}
+pub enum RenderPipelineType {
+    TriangleList(RenderPipelineDepthOption),
+    LineList(RenderPipelineDepthOption),
+}
 
-    pipeline_manager.add_pipeline(
-        "lines".to_owned(),
-        device,
-        swapchain_format,
-        &frustum_vert.0,
-        &frustum_frag.0,
-        depth_stencil_state.as_ref(),
-        &PrimitiveStateConfig::LineList,
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &color_bind_group_layout],
-    );
-
-    pipeline_manager.add_pipeline(
-        "lines_no_depth".to_owned(),
-        device,
-        swapchain_format,
-        &frustum_vert.0,
-        &frustum_frag.0,
-        None,
-        &PrimitiveStateConfig::LineList,
-        &ColorTargetConfig::Replace,
-        &[&uniform_bind_group_layout, &color_bind_group_layout],
-    );
-
-    pipeline_manager.add_pipeline(
-        "alphablended".to_owned(),
-        device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        depth_stencil_state.as_ref(),
-        &PrimitiveStateConfig::TriangleList,
-        &ColorTargetConfig::AlphaBlend,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
-    );
-
-    pipeline_manager.add_pipeline(
-        "alphablended_no_depth".to_owned(),
-        device,
-        swapchain_format,
-        &vertex_shader.0,
-        &fragment_shader.0,
-        None,
-        &PrimitiveStateConfig::TriangleList,
-        &ColorTargetConfig::AlphaBlend,
-        &[&uniform_bind_group_layout, &texture_bind_group_layout],
-    );
-
-    Ok(pipeline_manager)
+impl RenderPipelineType {
+    pub fn new(&self) -> RenderPipelineType {
+        match self {
+            RenderPipelineType::TriangleList(render_pipeline_depth_option) => {
+                RenderPipelineType::TriangleList(*render_pipeline_depth_option)
+            }
+            RenderPipelineType::LineList(render_pipeline_depth_option) => {
+                RenderPipelineType::LineList(*render_pipeline_depth_option)
+            }
+        }
+    }
+    pub fn build(
+        &self,
+        pipeline_manager: &mut PipelineManager,
+        shader_manager: &mut ShaderLibrary,
+        device: &Device,
+        swapchain_format: TextureFormat,
+        uniform_bind_group_layout: Arc<wgpu::BindGroupLayout>,
+        texture_bind_group_layout: Arc<wgpu::BindGroupLayout>,
+    ) {
+        match self {
+            RenderPipelineType::TriangleList(render_pipeline_depth_option) => {
+                if *render_pipeline_depth_option == RenderPipelineDepthOption::WithDepth {
+                    triangle_list_textured_with_depth(
+                        pipeline_manager,
+                        shader_manager,
+                        device,
+                        swapchain_format,
+                        &uniform_bind_group_layout,
+                        &texture_bind_group_layout,
+                    );
+                } else if *render_pipeline_depth_option == RenderPipelineDepthOption::WithNoDepth {
+                    triangle_list_textured_with_no_depth(
+                        pipeline_manager,
+                        shader_manager,
+                        device,
+                        swapchain_format,
+                        &uniform_bind_group_layout,
+                        &texture_bind_group_layout,
+                    );
+                }
+            }
+            RenderPipelineType::LineList(render_pipeline_depth_option) => {
+                if *render_pipeline_depth_option == RenderPipelineDepthOption::WithDepth {
+                    line_list_textured_with_depth(
+                        pipeline_manager,
+                        shader_manager,
+                        device,
+                        swapchain_format,
+                        &uniform_bind_group_layout,
+                        &texture_bind_group_layout,
+                    );
+                } else if *render_pipeline_depth_option == RenderPipelineDepthOption::WithNoDepth {
+                    line_list_textured_with_no_depth(
+                        pipeline_manager,
+                        shader_manager,
+                        device,
+                        swapchain_format,
+                        &uniform_bind_group_layout,
+                        &texture_bind_group_layout,
+                    );
+                }
+            }
+        }
+    }
 }
