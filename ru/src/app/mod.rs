@@ -22,14 +22,14 @@ pub enum DebugMode {
 }
 
 impl DebugMode {
-    pub fn toggle(&mut self) {
-        *self = match self {
+    pub fn next(self) -> DebugMode {
+        match self {
             DebugMode::None => DebugMode::FPS,
             DebugMode::FPS => DebugMode::Frame,
             DebugMode::Frame => DebugMode::Camera,
             DebugMode::Camera => DebugMode::Verbose,
             DebugMode::Verbose => DebugMode::None,
-        };
+        }
     }
 
     pub fn frame(frame_time: &FrameTime) -> String {

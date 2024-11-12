@@ -5,7 +5,7 @@ use wgpu::{
 };
 use winit::window::Window;
 
-use crate::{app::coalesce_format, log_debug, prelude::helpers::window_inner_size_to_vector2};
+use crate::{app::coalesce_format, prelude::helpers::window_inner_size_to_vector2};
 
 pub struct RenderSurface {
     pub surface: Surface<'static>,

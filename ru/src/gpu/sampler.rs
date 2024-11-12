@@ -1,4 +1,4 @@
-use crate::{core::error::AppError, graphics::global::get_device};
+use crate::core::error::AppError;
 
 pub enum SamplerType {
     Linear,
@@ -39,8 +39,10 @@ pub fn setup_sampler(
     });
     Ok(sampler)
 }
-pub fn create_sampler_from_type(sampler_type: SamplerType) -> Result<wgpu::Sampler, AppError> {
-    let device = get_device()?;
+pub fn create_sampler_from_type(
+    device: &wgpu::Device,
+    sampler_type: SamplerType,
+) -> Result<wgpu::Sampler, AppError> {
     let sampler = match sampler_type {
         SamplerType::Linear => setup_sampler(
             &device,

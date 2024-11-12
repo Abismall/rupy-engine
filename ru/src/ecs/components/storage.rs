@@ -1,6 +1,7 @@
-use crate::ecs::entities::models::Entity;
-
-use super::Component;
+use super::{
+    model::{ComponentVec, Entity},
+    Component,
+};
 
 pub trait ComponentStorage {
     fn remove(&self, entity: Entity);
@@ -8,42 +9,53 @@ pub trait ComponentStorage {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
-pub struct ComponentVec<T: Component> {
-    pub data: std::sync::RwLock<std::collections::HashMap<Entity, T>>,
-}
-
 impl<T: Component> ComponentVec<T> {
     pub fn new() -> Self {
-        Self {
-            data: std::sync::RwLock::new(std::collections::HashMap::new()),
+        Self { data: Vec::new() }
+    }
+    pub fn iter(&self) -> impl Iterator<Item = (Entity, &T)> {
+        self.data.iter().enumerate().filter_map(|(id, entry)| {
+            if let Some((generation, component)) = entry {
+                Some((
+                    Entity {
+                        id: id as u32,
+                        generation: *generation,
+                    },
+                    component,
+                ))
+            } else {
+                None
+            }
+        })
+    }
+    pub fn insert(&mut self, entity: Entity, component: T) {
+        let index = entity.id as usize;
+        if index >= self.data.len() {
+            self.data.reserve(self.data.len() + 1);
         }
-    }
-}
-impl<T: Component> ComponentVec<T> {
-    pub fn insert(&self, entity: Entity, component: T) -> Result<(), String> {
-        let mut data = self.data.write().map_err(|e| e.to_string())?;
-        data.insert(entity, component);
-        Ok(())
+        self.data.push(Some((entity.generation, component)));
     }
 
-    pub fn get(&self, entity: Entity) -> Option<T>
-    where
-        T: Clone,
-    {
-        let data = self.data.read().ok()?;
-        data.get(&entity).cloned()
-    }
-}
-impl<T: Component> ComponentStorage for ComponentVec<T> {
-    fn remove(&self, entity: Entity) {
-        let mut data = self.data.write().unwrap();
-        data.remove(&entity);
+    pub fn get(&self, entity: Entity) -> Option<&T> {
+        self.data
+            .get(entity.id as usize)
+            .and_then(|entry| entry.as_ref())
+            .and_then(|(gen, comp)| {
+                if *gen == entity.generation {
+                    Some(comp)
+                } else {
+                    None
+                }
+            })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
+    pub fn remove(&mut self, entity: Entity) {
+        if let Some(entry) = self.data.get_mut(entity.id as usize) {
+            if let Some((gen, _)) = entry {
+                if *gen == entity.generation {
+                    *entry = None;
+                }
+            }
+        }
     }
 }

@@ -1,9 +1,9 @@
 use nalgebra::Matrix4;
 
-use crate::ecs::components::vertex::Vertex;
+use crate::ecs::components::model::Vertex3D;
 
 pub struct Hexagon {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex3D>,
     pub indices: Vec<u32>,
     pub model_matrix: Matrix4<f32>,
 }
@@ -13,7 +13,6 @@ pub struct Hexagon {
 //         let mut vertices = Vec::new();
 //         let mut indices = Vec::new();
 
-//         // Generate vertices
 //         for i in 0..6 {
 //             let angle_deg = 60.0 * i as f32;
 //             let angle_rad = angle_deg.to_radians();
@@ -26,14 +25,12 @@ pub struct Hexagon {
 //             });
 //         }
 
-//         // Center vertex
 //         vertices.push(Vertex {
 //             position: [0.0, 0.0, 0.0],
 //             color,
 //             normal: [0.0, 0.0, 1.0],
 //         });
 
-//         // Indices
 //         for i in 0..6 {
 //             indices.push(6); // Center vertex index
 //             indices.push(i);

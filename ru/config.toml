@@ -1,4 +1,4 @@
 [paths]
 static = "RUPY_ENGINE_STATIC_DIR"
-images = "RUPY_ENGINE_IMAGES_DIR"
+images = "RUPY_ENGINE_TEXTURES_DIR"
 shaders = "RUPY_ENGINE_SHADERS_DIR"

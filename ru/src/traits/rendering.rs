@@ -1,7 +1,9 @@
 use nalgebra::Matrix4;
 
+use crate::gpu::buffer::VertexBuffer;
+
 pub trait Renderable {
-    type VertexType;
+    type VertexType: VertexBuffer;
 
     fn update(&mut self);
 

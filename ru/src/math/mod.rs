@@ -24,15 +24,7 @@ pub fn pixel_to_ndc(x: f32, y: f32, window_width: f32, window_height: f32) -> [f
     let y_ndc = 1.0 - (y / window_height) * 2.0;
     [x_ndc, y_ndc]
 }
-/// Generates a translation matrix for 3D transformations.
-///
-/// # Parameters
-/// - `x`: Translation along the x-axis.
-/// - `y`: Translation along the y-axis.
-/// - `z`: Translation along the z-axis.
-///
-/// # Returns
-/// A 4x4 translation matrix.
+
 pub fn mat4_translation(x: f32, y: f32, z: f32) -> Matrix4<f32> {
     [
         [1.0, 0.0, 0.0, x],

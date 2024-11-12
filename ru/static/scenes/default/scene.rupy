@@ -1,0 +1,30 @@
+name: "test_scene_with_texture"
+entities:
+  - components_3d:
+      transform:
+        position: [1.0, 2.0, 3.0]
+        rotation:
+          [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+          ]
+        scale: [2.0, 2.0, 2.0]
+      material:
+        color: [0.0, 1.0, 0.0, 1.0]
+        texture: "default"
+      vertices:
+        - position: [1.0, 1.0, 1.0]
+          color: [0.5, 0.5, 0.5, 1.0]
+          normal: [0.0, 1.0, 0.0]
+          tex_coords: [0.5, 0.5]
+        - position: [2.0, 1.0, 1.0]
+          color: [0.5, 0.5, 0.5, 1.0]
+          normal: [0.0, 1.0, 0.0]
+          tex_coords: [1.0, 0.5]
+        - position: [1.5, 2.0, 1.0]
+          color: [0.5, 0.5, 0.5, 1.0]
+          normal: [0.0, 1.0, 0.0]
+          tex_coords: [0.75, 1.0]
+      indices: [0, 1, 2] # Defining a triangle

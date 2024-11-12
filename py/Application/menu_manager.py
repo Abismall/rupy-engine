@@ -72,12 +72,10 @@ class MenuManager:
             self.notebook.hide(self.scene_files_menu)
 
     def show_menu_tab(self, menu_frame):
-        """Select the specific menu tab in the notebook."""
         index = self.notebook.index(menu_frame)
         self.notebook.select(index)
 
     def check_scene_queue(self):
-        """Check the queue for scenes loaded by the background thread and update the scene tab if available."""
         if not self.scene_queue.empty():
             self.scene_files_menu.scenes = self.scene_queue.get_nowait()
 

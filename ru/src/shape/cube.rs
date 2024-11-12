@@ -3,179 +3,193 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::{
-    ecs::components::vertex::Vertex,
+    ecs::components::model::Vertex3D,
     math::spatial::{GetValue, Height, Size3D, Width},
     traits::rendering::Renderable,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Cube {
     pub model_matrix: [[f32; 4]; 4],
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex3D>,
     pub indices: Vec<u16>,
     pub size: Size3D,
     pub position: [f32; 3],
 }
 
 impl Cube {
-    pub fn new(width: u32, height: u32, depth: u32, position: [f32; 3], scale_factor: f32) -> Self {
+    pub fn new(
+        width: u32,
+        height: u32,
+        depth: u32,
+        position: [f32; 3],
+        tex_coords: Option<[[f32; 2]; 24]>,
+    ) -> Self {
         let size = Size3D::new(width, height, depth);
-        let half_width = scale_factor / 2.0;
-        let half_height = scale_factor / 2.0;
-        let half_depth = scale_factor / 2.0;
+        let half_width = f32::from(size.size_2d.width) / 2.0;
+        let half_height = f32::from(size.size_2d.height);
+        let half_depth = f32::from(size.depth) / 2.0;
 
-        let vertices = vec![
+        let mut vertices = vec![
             // Front face
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, half_depth],
                 color: [1.0, 0.0, 0.0, 1.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, half_depth],
                 color: [1.0, 0.0, 0.0, 1.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, half_depth],
                 color: [1.0, 0.0, 0.0, 1.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, half_depth],
                 color: [1.0, 0.0, 0.0, 1.0],
                 normal: [0.0, 0.0, 1.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
             // Back face
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, -half_depth],
                 color: [0.0, 1.0, 0.0, 1.0],
                 normal: [0.0, 0.0, -1.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, -half_depth],
                 color: [0.0, 1.0, 0.0, 1.0],
                 normal: [0.0, 0.0, -1.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 0.0, 1.0],
                 normal: [0.0, 0.0, -1.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 0.0, 1.0],
                 normal: [0.0, 0.0, -1.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
             // Left face
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, -half_depth],
                 color: [0.0, 0.0, 1.0, 1.0],
                 normal: [-1.0, 0.0, 0.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, half_depth],
                 color: [0.0, 0.0, 1.0, 1.0],
                 normal: [-1.0, 0.0, 0.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, half_depth],
                 color: [0.0, 0.0, 1.0, 1.0],
                 normal: [-1.0, 0.0, 0.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, -half_depth],
                 color: [0.0, 0.0, 1.0, 1.0],
                 normal: [-1.0, 0.0, 0.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
             // Right face
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, -half_depth],
                 color: [1.0, 1.0, 0.0, 1.0],
                 normal: [1.0, 0.0, 0.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, half_depth],
                 color: [1.0, 1.0, 0.0, 1.0],
                 normal: [1.0, 0.0, 0.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, half_depth],
                 color: [1.0, 1.0, 0.0, 1.0],
                 normal: [1.0, 0.0, 0.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, -half_depth],
                 color: [1.0, 1.0, 0.0, 1.0],
                 normal: [1.0, 0.0, 0.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
             // Top face
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, half_depth],
                 color: [0.0, 1.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, half_depth],
                 color: [0.0, 1.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, half_height, -half_depth],
                 color: [0.0, 1.0, 1.0, 1.0],
                 normal: [0.0, 1.0, 0.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
             // Bottom face
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, half_depth],
                 color: [1.0, 0.0, 1.0, 1.0],
                 normal: [0.0, -1.0, 0.0],
                 tex_coords: [0.0, 0.0], // Bottom-left
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, half_depth],
                 color: [1.0, 0.0, 1.0, 1.0],
                 normal: [0.0, -1.0, 0.0],
                 tex_coords: [1.0, 0.0], // Bottom-right
             },
-            Vertex {
+            Vertex3D {
                 position: [half_width, -half_height, -half_depth],
                 color: [1.0, 0.0, 1.0, 1.0],
                 normal: [0.0, -1.0, 0.0],
                 tex_coords: [1.0, 1.0], // Top-right
             },
-            Vertex {
+            Vertex3D {
                 position: [-half_width, -half_height, -half_depth],
                 color: [1.0, 0.0, 1.0, 1.0],
                 normal: [0.0, -1.0, 0.0],
                 tex_coords: [0.0, 1.0], // Top-left
             },
         ];
+
+        if let Some(coords) = tex_coords {
+            for (i, vertex) in vertices.iter_mut().enumerate() {
+                if i < coords.len() {
+                    vertex.tex_coords = coords[i];
+                }
+            }
+        }
 
         let indices = vec![
             0, 1, 2, 2, 3, 0, // Front
@@ -189,9 +203,9 @@ impl Cube {
         let model_matrix =
             (Matrix4::new_translation(&Vector3::<f32>::new(position[0], position[1], position[2]))
                 * Matrix4::new_nonuniform_scaling(&Vector3::new(
-                    scale_factor,
-                    scale_factor,
-                    scale_factor,
+                    half_height,
+                    height as f32,
+                    half_height,
                 )))
             .into();
 
@@ -204,6 +218,48 @@ impl Cube {
         }
     }
 
+    pub fn set_tex_coords(&mut self, tex_coords: &Vec<[f32; 2]>) {
+        for (i, vertex) in self.vertices.iter_mut().enumerate() {
+            if i < tex_coords.len() {
+                vertex.tex_coords = tex_coords[i];
+            }
+        }
+    }
+    pub fn reset_tex_coords_default(&mut self) {
+        let default_tex_coords = vec![
+            // Front face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            // Back face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            // Left face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            // Right face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            // Top face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+            // Bottom face
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+            [0.0, 1.0],
+        ];
+        self.set_tex_coords(&default_tex_coords);
+    }
     pub fn set_size(&mut self, width: Width, height: Height) {
         self.size.size_2d.width = width.clone();
         self.size.size_2d.height = height.clone();
@@ -240,7 +296,7 @@ impl Cube {
         &self.size
     }
 
-    pub fn vertices(&self) -> &Vec<Vertex> {
+    pub fn vertices(&self) -> &Vec<Vertex3D> {
         &self.vertices
     }
 
@@ -254,7 +310,7 @@ impl Cube {
 }
 
 impl Renderable for Cube {
-    type VertexType = Vertex;
+    type VertexType = Vertex3D;
 
     fn update(&mut self) {}
 
@@ -262,7 +318,7 @@ impl Renderable for Cube {
         self.model_matrix.into()
     }
 
-    fn vertices(&self) -> &[Vertex] {
+    fn vertices(&self) -> &[Self::VertexType] {
         &self.vertices
     }
 
@@ -270,7 +326,6 @@ impl Renderable for Cube {
         &self.indices
     }
 }
-
 impl fmt::Display for Cube {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

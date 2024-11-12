@@ -1,4 +1,13 @@
+use glyphon::{
+    cosmic_text::LineEnding, Attrs, AttrsList, Cache, Family, FontSystem, Shaping, SwashCache,
+    TextArea, TextAtlas, TextRenderer, Viewport,
+};
 use glyphon::{Buffer, Resolution, TextBounds};
+use wgpu::{Device, Queue, RenderPass, SurfaceConfiguration};
+
+use crate::app::DebugMode;
+use crate::camera::Camera;
+use crate::prelude::frame::FrameTime;
 
 pub struct GlyphonRender {
     pub font_system: ::glyphon::FontSystem,
@@ -9,26 +18,14 @@ pub struct GlyphonRender {
     pub buffer: Buffer,
 }
 
-use glyphon::{
-    cosmic_text::LineEnding, Attrs, AttrsList, Cache, Family, FontSystem, Shaping, SwashCache,
-    TextArea, TextAtlas, TextRenderer, Viewport,
-};
-use nalgebra::Vector3;
-use wgpu::{CommandEncoder, Device, Queue, SurfaceConfiguration, TextureView};
-
-use crate::app::DebugMode;
-use crate::camera::Camera;
-use crate::prelude::frame::FrameTime;
-
 pub struct GlyphonManager {
     font_system: FontSystem,
     atlas: TextAtlas,
-    renderer_2d: TextRenderer, // Renderer without depth for 2D
-    renderer_3d: TextRenderer, // Renderer with depth for 3D
+    renderer_2d: TextRenderer,
+    renderer_3d: TextRenderer,
     swash_cache: SwashCache,
     viewport: Viewport,
     glyphon_buffer: glyphon::Buffer,
-    use_depth: bool, // Flag to determine whether to use depth
 }
 
 impl GlyphonManager {
@@ -43,20 +40,14 @@ impl GlyphonManager {
         let viewport = Viewport::new(device, &cache);
         let mut atlas = TextAtlas::new(device, queue, &cache, texture_format);
 
-        // Renderer without depth for 2D rendering
-        let renderer_2d = TextRenderer::new(
-            &mut atlas,
-            device,
-            wgpu::MultisampleState::default(),
-            None, // No depth-stencil state
-        );
+        let renderer_2d =
+            TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
 
-        // Renderer with depth for 3D rendering
         let renderer_3d = TextRenderer::new(
             &mut atlas,
             device,
             wgpu::MultisampleState::default(),
-            Some(depth_stencil), // Depth-stencil state enabled
+            Some(depth_stencil),
         );
 
         let font_system = FontSystem::new();
@@ -73,7 +64,6 @@ impl GlyphonManager {
             swash_cache,
             viewport,
             glyphon_buffer,
-            use_depth: false,
         }
     }
 
@@ -93,29 +83,24 @@ impl GlyphonManager {
             bottom: resolution.height as i32,
         }
     }
-    pub fn set_use_depth(&mut self, use_depth: bool) {
-        self.use_depth = use_depth;
-    }
-    pub fn render(
-        &mut self,
-        encoder: &mut CommandEncoder,
+
+    pub fn render<'a>(
+        &'a mut self,
+        pass: &mut RenderPass<'a>,
+        use_depth: bool,
         device: &Device,
         queue: &Queue,
-        view: &TextureView,
-        depth_stencil_attachment: Option<&wgpu::RenderPassDepthStencilAttachment>,
         surface_config: &SurfaceConfiguration,
     ) {
-        self.viewport.update(
+        self.reconfigure(
             queue,
             Resolution {
                 width: surface_config.width,
                 height: surface_config.height,
             },
         );
-
-        // Use appropriate renderer based on `use_depth`
-        let _ = if self.use_depth {
-            &self
+        let _ = if use_depth {
+            let _ = &self
                 .renderer_3d
                 .prepare(
                     device,
@@ -139,9 +124,12 @@ impl GlyphonManager {
                     }],
                     &mut self.swash_cache,
                 )
-                .expect("Failed to prepare text rendering")
+                .expect("Failed to prepare text rendering");
+            self.renderer_3d
+                .render(&self.atlas, &self.viewport, pass)
+                .expect("Failed to render text");
         } else {
-            &self
+            let _ = &self
                 .renderer_2d
                 .prepare(
                     device,
@@ -165,43 +153,11 @@ impl GlyphonManager {
                     }],
                     &mut self.swash_cache,
                 )
-                .expect("Failed to prepare text rendering")
+                .expect("Failed to prepare text rendering");
+            self.renderer_2d
+                .render(&self.atlas, &self.viewport, pass)
+                .expect("Failed to render text");
         };
-
-        let depth_stencil = if self.use_depth {
-            depth_stencil_attachment
-        } else {
-            None
-        };
-
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Glyphon Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: depth_stencil.cloned(),
-                timestamp_writes: Default::default(),
-                occlusion_query_set: Default::default(),
-            });
-
-            if self.use_depth {
-                self.renderer_3d
-                    .render(&self.atlas, &self.viewport, &mut pass)
-                    .expect("Failed to render text");
-            } else {
-                self.renderer_2d
-                    .render(&self.atlas, &self.viewport, &mut pass)
-                    .expect("Failed to render text");
-            }
-        }
-
-        //self.atlas.trim();
     }
 
     pub fn clear_buffer(&mut self) {
@@ -256,7 +212,6 @@ impl GlyphonManager {
         &mut self,
         debug_mode: DebugMode,
         frame_time: &FrameTime,
-        fps: f32,
         camera: &Camera,
     ) {
         self.clear_buffer();
@@ -264,7 +219,7 @@ impl GlyphonManager {
         match debug_mode {
             DebugMode::None => {}
             DebugMode::FPS => {
-                self.draw_fps([10.0, 10.0], fps);
+                self.draw_fps([10.0, 10.0], frame_time.fps);
             }
             DebugMode::Frame => {
                 self.draw_frame_time([10.0, 10.0], frame_time);
@@ -273,7 +228,7 @@ impl GlyphonManager {
                 self.draw_camera([10.0, 30.0], camera.position.into(), camera.target.into());
             }
             DebugMode::Verbose => {
-                self.draw_fps([10.0, 10.0], fps);
+                self.draw_fps([10.0, 10.0], frame_time.fps);
                 self.draw_frame_time([10.0, 30.0], frame_time);
                 self.draw_camera([10.0, 50.0], camera.position.into(), camera.target.into());
             }

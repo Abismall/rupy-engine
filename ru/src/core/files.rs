@@ -32,22 +32,6 @@ pub enum FileType {
 }
 pub struct FileSystem;
 impl FileSystem {
-    fn find_directory_recursive(path: &Path, dir_name: &str) -> Option<PathBuf> {
-        if let Ok(entries) = fs::read_dir(path) {
-            for entry in entries.flatten() {
-                let entry_path = entry.path();
-                if entry_path.is_dir() {
-                    if entry_path.file_name().and_then(|name| name.to_str()) == Some(dir_name) {
-                        return Some(entry_path);
-                    }
-                    if let Some(found) = Self::find_directory_recursive(&entry_path, dir_name) {
-                        return Some(found);
-                    }
-                }
-            }
-        }
-        None
-    }
     pub fn get_static_dir() -> Result<PathBuf, AppError> {
         std::env::var("RUPY_ENGINE_STATIC_DIR")
             .map(PathBuf::from)
@@ -59,8 +43,8 @@ impl FileSystem {
             "scenes".into(),
         ]))
     }
-    pub fn get_images_dir() -> Result<PathBuf, AppError> {
-        std::env::var("RUPY_ENGINE_IMAGES_DIR")
+    pub fn get_textures_dir() -> Result<PathBuf, AppError> {
+        std::env::var("RUPY_ENGINE_TEXTURES_DIR")
             .map(PathBuf::from)
             .map_err(|e| AppError::ConfigError(e.to_string()))
     }
@@ -70,14 +54,16 @@ impl FileSystem {
             .map(PathBuf::from)
             .map_err(|e| AppError::ConfigError(e.to_string()))
     }
-    pub fn get_image_file_path(file_name: &str) -> Result<PathBuf, AppError> {
-        Ok(FileSystem::get_images_dir()?.join(file_name))
+    pub fn get_texture_base_folder(file_name: &str) -> Result<PathBuf, AppError> {
+        Ok(FileSystem::get_textures_dir()?.join(file_name))
     }
 
     pub fn get_shader_file_path(file_name: &str) -> Result<PathBuf, AppError> {
         Ok(FileSystem::get_shaders_dir()?.join(file_name))
     }
-
+    pub fn get_scene_file_path(file_name: &str) -> Result<PathBuf, AppError> {
+        Ok(FileSystem::get_scenes_dir()?.join(file_name))
+    }
     pub fn resolve_static_path(path: &str) -> Result<PathBuf, AppError> {
         let resolved_path = fs::canonicalize(PathBuf::from(path))?;
         Ok(resolved_path)

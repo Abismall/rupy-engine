@@ -1,7 +1,7 @@
 pub mod proxy;
 use winit::event::{Modifiers, MouseButton};
 
-use crate::texture::{config::TextureConfig, file::TextureFile};
+use crate::texture::config::TextureConfig;
 
 #[derive(Debug)]
 pub enum RupyAppEvent {

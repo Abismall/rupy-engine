@@ -1,9 +1,9 @@
 use nalgebra::Matrix4;
 
-use crate::{ecs::components::vertex::Vertex, traits::rendering::Renderable};
+use crate::{ecs::components::model::Vertex3D, traits::rendering::Renderable};
 
 pub struct ShadedRectangle {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex3D>,
     pub indices: Vec<u16>,
     pub model_matrix: Matrix4<f32>,
 }
@@ -49,14 +49,14 @@ pub struct ShadedRectangle {
 //     }
 // }
 impl Renderable for ShadedRectangle {
-    type VertexType = Vertex;
+    type VertexType = Vertex3D;
     fn update(&mut self) {}
 
     fn model_matrix(&self) -> Matrix4<f32> {
         self.model_matrix
     }
 
-    fn vertices(&self) -> &[Vertex] {
+    fn vertices(&self) -> &[Self::VertexType] {
         &self.vertices
     }
 

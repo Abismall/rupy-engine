@@ -3,7 +3,7 @@ pub mod camera;
 pub mod core;
 pub mod ecs;
 pub mod events;
-pub mod graphics;
+pub mod gpu;
 pub mod input;
 pub mod math;
 pub mod pipeline;

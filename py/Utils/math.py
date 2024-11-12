@@ -3,14 +3,11 @@ import math
 import random
 from typing import Tuple, List
 
-# Constants
 PI = math.pi
 TWO_PI = 2 * math.pi
 HALF_PI = math.pi / 2
 DEG_TO_RAD = PI / 180
 RAD_TO_DEG = 180 / PI
-
-# Vector Operations
 
 
 def add_vectors(v1: Tuple[float, float], v2: Tuple[float, float]) -> Tuple[float, float]:
@@ -68,8 +65,6 @@ def normalize_vector(v: Tuple[float, float]) -> Tuple[float, float]:
         return 0, 0
     return v[0] / length, v[1] / length
 
-# Distance and Angle Calculations
-
 
 def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
     """
@@ -116,8 +111,6 @@ def radians_to_degrees(radians: float) -> float:
     """
     return radians * RAD_TO_DEG
 
-# Random Generators
-
 
 def random_int(min_value: int, max_value: int) -> int:
     """
@@ -149,8 +142,6 @@ def random_choice(choices: List) -> any:
     :return: Randomly selected element.
     """
     return random.choice(choices)
-
-# Collision Detection
 
 
 def point_in_rect(point: Tuple[float, float], rect: Tuple[float, float, float, float]) -> bool:

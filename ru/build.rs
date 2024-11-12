@@ -16,8 +16,8 @@ fn main() {
         target_static_dir.display()
     );
     println!(
-        "cargo:rustc-env=RUPY_ENGINE_IMAGES_DIR={}",
-        target_static_dir.join("images").display()
+        "cargo:rustc-env=RUPY_ENGINE_TEXTURES_DIR={}",
+        target_static_dir.join("textures").display()
     );
     println!(
         "cargo:rustc-env=RUPY_ENGINE_SHADERS_DIR={}",

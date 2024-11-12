@@ -1,3 +1,21 @@
+#[derive(Debug)]
+pub enum PrimitiveType {
+    Line,
+    Triangle,
+    Quad,
+}
+
+#[derive(Debug)]
+pub enum ShadingType {
+    Color,
+    Texture,
+}
+
+#[derive(Debug)]
+pub enum DepthType {
+    Depth,
+    NoDepth,
+}
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, Face, FrontFace, PolygonMode, PrimitiveState,
     PrimitiveTopology, TextureFormat,

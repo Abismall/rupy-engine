@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 use crate::{
-    ecs::components::vertex::Vertex,
+    ecs::components::model::Vertex2D,
     math::{
         self,
         spatial::{Height, Size2D, Width},
@@ -11,10 +11,10 @@ use crate::{
     traits::rendering::Renderable,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Triangle {
     pub model_matrix: [[f32; 4]; 4],
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<Vertex2D>,
     pub indices: Vec<u16>,
     pub size: Size2D,
     pub position: [f32; 3],
@@ -27,34 +27,29 @@ impl Triangle {
         let half_height = f32::from(size.height);
 
         let vertices = vec![
-            Vertex {
-                position: [-half_width, 0.0, -half_width],
+            Vertex2D {
+                position: [-half_width, 0.0],
                 color: [0.0, 1.0, 0.0, 1.0],
-                normal: [0.0, -1.0, 0.0],
                 tex_coords: [0.0, 0.0],
             },
-            Vertex {
-                position: [half_width, 0.0, -half_width],
+            Vertex2D {
+                position: [half_width, 0.0],
                 color: [0.0, 1.0, 0.0, 1.0],
-                normal: [0.0, -1.0, 0.0],
                 tex_coords: [1.0, 0.0],
             },
-            Vertex {
-                position: [half_width, 0.0, half_width],
+            Vertex2D {
+                position: [half_width, 0.0],
                 color: [0.0, 1.0, 0.0, 1.0],
-                normal: [0.0, -1.0, 0.0],
                 tex_coords: [1.0, 1.0],
             },
-            Vertex {
-                position: [-half_width, 0.0, half_width],
+            Vertex2D {
+                position: [-half_width, 0.0],
                 color: [0.0, 1.0, 0.0, 1.0],
-                normal: [0.0, -1.0, 0.0],
                 tex_coords: [0.0, 1.0],
             },
-            Vertex {
-                position: [0.0, half_height, 0.0],
+            Vertex2D {
+                position: [0.0, half_height],
                 color: [1.0, 0.0, 0.0, 1.0],
-                normal: [0.0, 1.0, 0.0],
                 tex_coords: [1.0, 0.0],
             },
         ];
@@ -71,7 +66,24 @@ impl Triangle {
             position: position.into(),
         }
     }
+    pub fn set_tex_coords(&mut self, tex_coords: &[[f32; 2]; 5]) {
+        for (i, vertex) in self.vertices.iter_mut().enumerate() {
+            if i < tex_coords.len() {
+                vertex.tex_coords = tex_coords[i];
+            }
+        }
+    }
 
+    pub fn reset_tex_coords_default(&mut self) {
+        let default_tex_coords = [
+            [0.0, 1.0], // Bottom-left
+            [1.0, 1.0], // Bottom-right
+            [1.0, 0.0], // Top-right
+            [0.0, 0.0], // Top-left
+            [0.5, 0.5], // Apex of the triangle
+        ];
+        self.set_tex_coords(&default_tex_coords);
+    }
     pub fn set_size(&mut self, width: Width, height: Height) {
         let width: f32 = width.into();
         let height: f32 = height.into();
@@ -109,7 +121,7 @@ impl Triangle {
         &self.size
     }
 
-    pub fn vertices(&self) -> &Vec<Vertex> {
+    pub fn vertices(&self) -> &[Vertex2D] {
         &self.vertices
     }
 
@@ -123,7 +135,7 @@ impl Triangle {
 }
 
 impl Renderable for Triangle {
-    type VertexType = Vertex;
+    type VertexType = Vertex2D;
 
     fn update(&mut self) {}
 
@@ -131,7 +143,7 @@ impl Renderable for Triangle {
         self.model_matrix.into()
     }
 
-    fn vertices(&self) -> &[Vertex] {
+    fn vertices(&self) -> &[Self::VertexType] {
         &self.vertices
     }
 

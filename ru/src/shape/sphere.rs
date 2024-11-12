@@ -1,9 +1,9 @@
 use nalgebra::Matrix4;
 
-use crate::{ecs::components::vertex::Vertex, traits::rendering::Renderable};
+use crate::{ecs::components::model::Vertex3D, traits::rendering::Renderable};
 
 pub struct ShadedSphere {
-    pub vertices: Vec<Vertex>,      // A Vec to hold vertices
+    pub vertices: Vec<Vertex3D>,    // A Vec to hold vertices
     pub indices: Vec<u16>,          // A Vec to hold indices
     pub model_matrix: Matrix4<f32>, // Matrix4 to store the transformation matrix
 }
@@ -19,7 +19,6 @@ pub struct ShadedSphere {
 //         let mut vertices = Vec::new();
 //         let mut indices = Vec::new();
 
-//         // Generate vertices
 //         for lat_number in 0..=latitude_bands {
 //             let theta = lat_number as f32 * std::f32::consts::PI / latitude_bands as f32;
 //             let sin_theta = theta.sin();
@@ -45,7 +44,6 @@ pub struct ShadedSphere {
 //             }
 //         }
 
-//         // Generate indices
 //         for lat_number in 0..latitude_bands {
 //             for long_number in 0..longitude_bands {
 //                 let first = (lat_number * (longitude_bands + 1)) + long_number;
@@ -62,7 +60,6 @@ pub struct ShadedSphere {
 //             }
 //         }
 
-//         // Create the model matrix with translation (cgmath::Matrix4 expects Vector3)
 //         let model_matrix = Matrix4::from_translation(Vector3::from(position));
 
 //         Self {
@@ -73,7 +70,7 @@ pub struct ShadedSphere {
 //     }
 // }
 impl Renderable for ShadedSphere {
-    type VertexType = Vertex;
+    type VertexType = Vertex3D;
 
     fn update(&mut self) {}
 
@@ -81,7 +78,7 @@ impl Renderable for ShadedSphere {
         self.model_matrix
     }
 
-    fn vertices(&self) -> &[Vertex] {
+    fn vertices(&self) -> &[Self::VertexType] {
         &self.vertices
     }
 

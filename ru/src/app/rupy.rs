@@ -9,8 +9,8 @@ use crate::rupyLogger;
 use crate::{
     core::{error::AppError, worker::WorkerTask},
     events::RupyAppEvent,
-    graphics::{global::initialize_instance, RenderMode},
-    log_debug, log_error, log_info,
+    gpu::global::initialize_instance,
+    log_error, log_info,
     prelude::helpers::get_window_attributes,
     traits::bus::EventProxyTrait,
 };
@@ -70,7 +70,7 @@ impl Rupy {
         match event_loop.create_window(
             WindowAttributes::default()
                 .with_title("RupyEngine")
-                .with_decorations(false)
+                .with_decorations(true)
                 .with_inner_size(winit::dpi::LogicalSize::new(width, height))
                 .with_position(winit::dpi::LogicalPosition::new(x, y)),
         ) {
@@ -84,27 +84,5 @@ impl Rupy {
             return Err(e);
         };
         Ok(())
-    }
-    pub fn toggle_debug_mode(&mut self) {
-        if let Some(ctx) = &mut self.render_context {
-            self.debug.toggle();
-            ctx.debug = self.debug;
-            log_info!("{:?}", ctx.debug);
-        };
-    }
-
-    pub fn toggle_render_mode(&mut self) {
-        if let Some(ctx) = &mut self.render_context {
-            let mode = match ctx.mode {
-                RenderMode::TriangleListDepthView => RenderMode::TriangleListNoDepth,
-                RenderMode::TriangleListNoDepth => RenderMode::LineListDepthView,
-                RenderMode::LineListDepthView => RenderMode::LineListNoDepth,
-                RenderMode::LineListNoDepth => RenderMode::TriangleListDepthView,
-            };
-
-            ctx.set_render_mode(mode);
-            ctx.text_rendering_system
-                .set_use_depth(mode.use_depth_stencil());
-        }
     }
 }

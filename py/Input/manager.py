@@ -41,7 +41,6 @@ class InputManager:
         mouse_state = self.mouse_handler.get_state()
         keyboard_state = self.keyboard_handler.get_state()
 
-        # If pressed_only_mode is enabled, filter the keyboard state to include only pressed keys
         if self.pressed_only_mode:
             keyboard_state = {
                 key: state for key, state in keyboard_state.items() if state == True}
@@ -50,7 +49,6 @@ class InputManager:
             "mouse": mouse_state,
             "keyboard": keyboard_state,
         }
-    # Mouse-related methods
 
     def get_mouse_position(self):
         """

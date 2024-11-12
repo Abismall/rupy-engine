@@ -56,6 +56,7 @@ impl Camera {
         near: f32,
         far: f32,
     ) {
+        log_debug!("Setting orthographic projection");
         self.proj_matrix = Matrix4::new_orthographic(left, right, bottom, top, near, far);
     }
 
@@ -66,6 +67,7 @@ impl Camera {
         near: f32,
         far: f32,
     ) {
+        log_debug!("Setting set_perspective_projection");
         self.proj_matrix = Matrix4::new_perspective(aspect_ratio, fov_y, near, far);
     }
     pub fn view_matrix(&self) -> Matrix4<f32> {
@@ -182,7 +184,7 @@ use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta};
 use winit::keyboard::KeyCode;
 
 use crate::input::InputListener;
-use crate::log_error;
+use crate::{log_debug, log_error};
 impl InputListener for Camera {
     fn on_key_event(&mut self, event: &KeyEvent, delta_time: f32) {
         match event.physical_key {

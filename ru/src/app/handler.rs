@@ -1,11 +1,11 @@
 use crate::{
     app::context::RenderContext,
     events::{RupyAppEvent, WorkerTaskCompletion},
-    graphics::RenderMode,
+    gpu::RenderMode,
     input::InputListener,
     log_error, log_info,
     prelude::rupy::Rupy,
-    texture::resize_depth_texture,
+    texture::create_depth_texture_with_view,
 };
 use pollster::block_on;
 use wgpu::rwh::HasDisplayHandle;
@@ -26,8 +26,7 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
             if let Some(context) = &mut self.render_context {
                 if context.window.display_handle().is_ok() {
                     context.frame.compute();
-                    context.update_frustum();
-                    context.draw_debug();
+                    context.draw_debug_info();
                     context.window.request_redraw();
                 };
             }
@@ -48,31 +47,28 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
         } else {
             return;
         };
+
         match event {
             WindowEvent::Resized(size) => {
-                let device_binding = &context.device;
                 context.render_surface.surface_config.width = size.width;
                 context.render_surface.surface_config.height = size.height;
-                context
+                let _ = context
                     .render_surface
                     .resize(size.width, size.height, &context.device);
-                let (depth_texture, depth_texture_view) =
-                    resize_depth_texture(&device_binding, &context.render_surface.surface_config);
-                match (depth_texture, depth_texture_view) {
-                    (Some(texture), Some(view)) => {
-                        context.depth_texture = Some(texture.into());
-                        context.depth_texture_view = Some(view.into());
-                    }
-                    _ => {}
-                }
+
+                context.depth_texture_view = create_depth_texture_with_view(
+                    &context.device,
+                    &context.render_surface.surface_config,
+                )
+                .1;
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
                 MouseScrollDelta::LineDelta(_, scroll_y) => {
-                    context.camera.zoom(scroll_y);
+                    context.world.camera.zoom(scroll_y);
                     context.render_surface.window.request_redraw();
                 }
                 MouseScrollDelta::PixelDelta(delta) => {
-                    context.camera.zoom(delta.y as f32 * 0.1);
+                    context.world.camera.zoom(delta.y as f32 * 0.1);
                     context.render_surface.window.request_redraw();
                 }
             },
@@ -81,27 +77,26 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                 state: button_state,
                 ..
             } => {
-                context.camera.on_mouse_button(button, button_state);
+                context.world.camera.on_mouse_button(button, button_state);
             }
 
             WindowEvent::CursorMoved { position, .. } => {
                 let delta_x = position.x - context.last_mouse_position.x;
                 let delta_y = position.y - context.last_mouse_position.y;
 
-                context.camera.on_mouse_motion((delta_x, delta_y));
+                context.world.camera.on_mouse_motion((delta_x, delta_y));
 
                 context.last_mouse_position = position;
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let is_pressed = event.state.is_pressed();
                 let key = event.physical_key;
-
                 match key {
                     PhysicalKey::Code(KeyCode::KeyQ) if is_pressed => {
-                        self.toggle_debug_mode();
+                        context.toggle_debug_mode();
                     }
                     PhysicalKey::Code(KeyCode::ShiftLeft) if is_pressed => {
-                        self.toggle_render_mode();
+                        context.toggle_render_mode();
                     }
                     PhysicalKey::Code(KeyCode::Escape) if is_pressed => {
                         self.state.set_shutting_down();
@@ -112,6 +107,7 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                     _ if is_pressed => {
                         if self.state.is_running() {
                             context
+                                .world
                                 .camera
                                 .on_key_event(&event, context.frame.delta_time);
                         }
@@ -120,11 +116,7 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                 }
             }
 
-            WindowEvent::RedrawRequested => {
-                if self.state.is_running() {
-                    let _ = context.render_frame();
-                }
-            }
+            WindowEvent::RedrawRequested => context.render_world(),
 
             _ => {}
         }
@@ -136,14 +128,10 @@ impl winit::application::ApplicationHandler<RupyAppEvent> for Rupy {
                 Ok(win) => {
                     let render_context = match block_on(RenderContext::new(
                         win.into(),
-                        RenderMode::TriangleListDepthView,
+                        RenderMode::TriangleTextureWithDepth,
                         self.debug,
                     )) {
-                        Ok(mut ctx) => {
-                            let _ = ctx.world.load_scene("test", &mut ctx.material_manager);
-
-                            ctx
-                        }
+                        Ok(ctx) => ctx,
                         Err(e) => {
                             log_error!("{:?}", e);
                             return;

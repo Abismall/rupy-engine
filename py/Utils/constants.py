@@ -1,29 +1,21 @@
-# ========================
-# PROJECT CONFIGURATION
-# ========================
+
 PYENGINE = "rupyengine"
 PYPROJECT = "pyproject.toml"
 DEFAULT_SLEEP_AFTER_CYCLE = 0.1
 FROZEN_EXEC = 'frozen'
 LAUNCH_OPTIONS_FLAG = 'lo'
 
-# ========================
-# MENU GEOMETRY
-# ========================
+
 SIZE_SMALL = "300x450"          # Small size: 300 pixels wide, 450 pixels high
 SIZE_MEDIUM = "400x600"         # Medium size: 400 pixels wide, 600 pixels high
 SIZE_LARGE = "500x750"          # Large size: 500 pixels wide, 750 pixels high
 SIZE_EXTRA_LARGE = "600x900"    # Extra large size: 600 pixels wide, 900 pixels high
 
-# ========================
-# LAUNCH OPTIONS MENU
-# ========================
+
 LAUNCHER_MENU = "launcher_menu"
 SCENE_MENU = "scenes_menu"
 
-# ========================
-# LOGGER CONFIGURATION
-# ========================
+
 LOGGER_NAME_BASE = "RupyLogger"
 LOG_METHOD_FILE = "file"
 LOG_METHOD_CONSOLE = "console"
@@ -33,11 +25,6 @@ DEFAULT_LOG_LEVEL = "info"
 DEFAULT_LOG_FORMAT = "verbose"
 
 
-# ========================
-# ERROR MESSAGES
-# ========================
-
-# General Error Messages
 UNKNOWN_ERROR_MSG = "An unexpected error occurred. Please try again."
 IMPORT_ERROR_MSG = "Failed to import the required module."
 TYPE_ERROR_MSG = "Type mismatch encountered."
@@ -48,9 +35,6 @@ RUNTIME_ERROR_MSG = "A runtime error has occurred."
 CHILD_PROCESS_ERROR_MSG = "Error in child process execution."
 
 
-# ========================
-# SIGNALS
-# ========================
 APP_INIT_SIGNAL = "app:init"
 APP_START_SIGNAL = "app:start"
 APP_UPDATE_SIGNAL = "app:state:update"
@@ -65,9 +49,6 @@ MENU_OPEN_SIGNAL = "menu:open"
 MENU_CLOSE_SIGNAL = "menu:close"
 APP_INTERRUPT_SIGNAL = "app:interrupt"
 
-# ========================
-# INPUTS
-# ========================
 
 HEX_MAP = {
 

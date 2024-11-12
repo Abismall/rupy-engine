@@ -3,11 +3,35 @@ use nalgebra::Matrix4;
 use serde::{Deserialize, Serialize};
 use triangle::Triangle;
 
+use crate::ecs::components::model::{Vertex2D, Vertex3D};
+
 pub mod cube;
 pub mod hexagon;
 pub mod rectangle;
 pub mod sphere;
 pub mod triangle;
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum GeometryId {
+    Triangle,
+    Cube,
+}
+impl Serialize for GeometryId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        Ok(match self {
+            GeometryId::Triangle => serializer.collect_str("Triangle")?,
+            GeometryId::Cube => serializer.collect_str("Cube")?,
+        })
+    }
+}
+pub enum VertexType {
+    Vertex2D(Vec<Vertex2D>),
+    Vertex3D(Vec<Vertex3D>),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
 pub enum Geometry {
@@ -16,14 +40,14 @@ pub enum Geometry {
 }
 
 impl Geometry {
-    pub fn vertex_buffer_data(&self) -> &Vec<crate::ecs::components::vertex::Vertex> {
+    pub fn vertices(&self) -> VertexType {
         match self {
-            Geometry::Triangle(triangle) => triangle.vertices(),
-            Geometry::Cube(cube) => cube.vertices(),
+            Geometry::Triangle(triangle) => VertexType::Vertex2D(triangle.vertices().to_vec()),
+            Geometry::Cube(cube) => VertexType::Vertex3D(cube.vertices().to_vec()),
         }
     }
 
-    pub fn index_buffer_data(&self) -> &[u16] {
+    pub fn indices(&self) -> &[u16] {
         match self {
             Geometry::Triangle(triangle) => triangle.indices(),
             Geometry::Cube(cube) => cube.indices(),

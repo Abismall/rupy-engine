@@ -14,6 +14,15 @@ use crate::events::RupyAppEvent;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("Scene error: {0}")]
+    CreateSceneError(String),
+
+    #[error("Component error: {0}")]
+    ComponentError(String),
+
+    #[error("Scene not found: {0}")]
+    SceneNotFoundError(String),
+
     #[error("Material type error: {0}")]
     MaterialTypeError(String),
 
@@ -41,8 +50,8 @@ pub enum AppError {
     #[error("Channel error: {0}")]
     ChannelError(String),
 
-    #[error("Failed to load texture file: {0}")]
-    TextureFileLoadError(String),
+    #[error("Failed to load texture file")]
+    TextureFileLoadError,
 
     #[error("Surface was lost or has not been initialized")]
     SurfaceInitializationError,
