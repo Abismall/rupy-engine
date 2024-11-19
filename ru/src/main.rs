@@ -6,12 +6,11 @@ use rupy::{
     app::state::AppState,
     core::{error::AppError, worker::RupyWorker},
     events::{
-        proxy::{EventBusProxy, EventProxy},
+        proxy::{EventBusProxy, EventProxy, EventProxyTrait},
         RupyAppEvent,
     },
     prelude::{rupy::Rupy, worker::WorkerTask},
     rupyLogger::factory::LogFactory,
-    traits::bus::EventProxyTrait,
 };
 use winit::event_loop::EventLoop;
 

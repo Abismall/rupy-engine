@@ -70,7 +70,7 @@ pub fn default_surface_configuration(
         coalesce_format(&surface_caps),
         surface_size.x,
         surface_size.y,
-        PresentMode::Fifo,
+        PresentMode::FifoRelaxed,
         surface_caps.alpha_modes[0],
         TextureUsages::RENDER_ATTACHMENT,
         (&[]).to_vec(),

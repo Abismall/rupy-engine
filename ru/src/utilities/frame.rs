@@ -1,5 +1,5 @@
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
 #[derive(Debug, Clone, Copy)]
 pub struct FrameTime {
     pub last_frame_time: Instant,
@@ -13,7 +13,7 @@ impl FrameTime {
     pub fn new() -> Self {
         Self {
             last_frame_time: Instant::now(),
-            frame_time_accumulator: Duration::default(),
+            frame_time_accumulator: Duration::ZERO,
             frame_count: 0,
             fps: 0.0,
             delta_time: 0.0,
@@ -31,6 +31,7 @@ impl FrameTime {
 
         if self.frame_time_accumulator >= Duration::from_secs(1) {
             self.fps = self.frame_count as f32 / self.frame_time_accumulator.as_secs_f32();
+
             self.frame_count = 0;
             self.frame_time_accumulator = Duration::ZERO;
         }

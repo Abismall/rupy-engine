@@ -2,10 +2,7 @@ use std::path::Path;
 
 use wgpu::{ShaderModule, ShaderModuleDescriptor};
 
-use crate::{
-    core::{error::AppError, files::FileSystem},
-    prelude::constant::WGSL_SHADER_EXT,
-};
+use crate::core::{error::AppError, files::FileSystem};
 
 #[derive(Debug)]
 pub struct RupyShader {
@@ -49,15 +46,4 @@ pub fn create_shader_modules(
     let fragment_shader_module = create_shader_module_from_path(device, f_path)?;
 
     Ok((vertex_shader_module, fragment_shader_module))
-}
-
-pub fn list_shader_file_paths() -> std::result::Result<Vec<String>, AppError> {
-    let path_bufs =
-        FileSystem::list_files_with_extension(&FileSystem::get_shaders_dir()?, WGSL_SHADER_EXT)?;
-    let paths: Vec<String> = path_bufs
-        .iter()
-        .filter_map(|path| path.to_str().map(|s| s.to_string()))
-        .collect();
-
-    Ok(paths)
 }

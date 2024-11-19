@@ -69,15 +69,15 @@ pub fn get_window_attributes() -> (u32, u32, i32, i32) {
     let width: u32 = env::var("RUPY_ENGINE_WINDOW_WIDTH")
         .ok()
         .and_then(|val| val.parse().ok())
-        .unwrap_or(800);
+        .unwrap_or(1000);
     let height: u32 = env::var("RUPY_ENGINE_WINDOW_HEIGHT")
         .ok()
         .and_then(|val| val.parse().ok())
-        .unwrap_or(600);
+        .unwrap_or(800);
     let x: i32 = env::var("RUPY_ENGINE_WINDOW_X_ANCHOR")
         .ok()
         .and_then(|val| val.parse().ok())
-        .unwrap_or(100);
+        .unwrap_or(450);
     let y: i32 = env::var("RUPY_ENGINE_WINDOW_Y_ANCHOR")
         .ok()
         .and_then(|val| val.parse().ok())

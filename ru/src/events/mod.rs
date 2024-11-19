@@ -1,7 +1,7 @@
 pub mod proxy;
 use winit::event::{Modifiers, MouseButton};
 
-use crate::texture::config::TextureConfig;
+use crate::{camera::Camera, gpu::RenderMode, texture::config::TextureConfig};
 
 #[derive(Debug)]
 pub enum RupyAppEvent {
@@ -12,7 +12,7 @@ pub enum RupyAppEvent {
     ToggleDebugMode,
     ToggleLaunchMenu,
     CreateSurface,
-    CreateWindow,
+    CreateWindow(RenderMode, Camera),
     ToggleAudio,
     AudioMuteOn,
     AudioMuteOff,

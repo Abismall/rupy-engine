@@ -679,6 +679,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
+ "hashbrown",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
 name = "derive_arbitrary"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2347,6 +2361,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "crossbeam",
+ "dashmap",
  "env_logger",
  "glyphon",
  "image",
@@ -2359,6 +2374,7 @@ dependencies = [
  "pollster",
  "quaternion",
  "rand",
+ "rayon",
  "serde",
  "serde_derive",
  "serde_yaml",
@@ -2366,6 +2382,7 @@ dependencies = [
  "tokio",
  "toml",
  "vecmath",
+ "walkdir",
  "wgpu",
  "winit",
 ]

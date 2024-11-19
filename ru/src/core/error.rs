@@ -16,7 +16,8 @@ use crate::events::RupyAppEvent;
 pub enum AppError {
     #[error("Scene error: {0}")]
     CreateSceneError(String),
-
+    #[error("Invalid mesh data error: {0}")]
+    InvalidMeshData(String),
     #[error("Component error: {0}")]
     ComponentError(String),
 
@@ -79,6 +80,9 @@ pub enum AppError {
 
     #[error("Image error: {0}")]
     ImageError(#[from] ImageError),
+
+    #[error("Error traversing directories: {0}")]
+    WalkDirError(#[from] walkdir::Error),
 
     #[error("Failed to initialize the GPU instance.")]
     InstanceInitializationError,

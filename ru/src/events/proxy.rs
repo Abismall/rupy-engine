@@ -1,9 +1,24 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use crossbeam::channel::Receiver;
 use winit::event_loop::EventLoopProxy;
 
-use crate::{log_warning, traits::bus::EventProxyTrait};
+use crate::log_warning;
+
+use super::RupyAppEvent;
+
+pub trait EventBusListenTrait {
+    fn subscribe<T>(component: Arc<RwLock<T>>, bus: &mut EventProxy<RupyAppEvent>)
+    where
+        T: 'static + std::marker::Send + std::marker::Sync;
+}
+
+pub trait EventProxyTrait<T: 'static + std::fmt::Debug> {
+    fn send_event(&self, event: T) -> Result<(), winit::event_loop::EventLoopClosed<T>>;
+}
 
 pub struct EventProxy<T: 'static + std::fmt::Debug> {
     event_loop_proxy: Arc<EventLoopProxy<T>>,

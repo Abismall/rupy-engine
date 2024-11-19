@@ -1,8 +1,8 @@
 pub mod config;
-
+pub mod manager;
 use crate::{
     core::{error::AppError, files::FileSystem},
-    gpu::sampler::{create_sampler_from_type, SamplerType},
+    gpu::sampler::{sampler_from_type, SamplerType},
     log_error,
 };
 use config::{load_texture_config_from_folder, load_texture_image_from_folder};
@@ -34,7 +34,7 @@ pub fn load_texture_by_name(
         view_formats: &[],
     });
 
-    let sampler = create_sampler_from_type(device, SamplerType::Linear)?;
+    let sampler = sampler_from_type(device, &SamplerType::Textured)?;
     Ok(TextureFile {
         texture,
         id: config.id,
@@ -155,7 +155,7 @@ pub fn set_depth_texture_size(texture: wgpu::Texture, width: u32, height: u32) -
     texture
 }
 
-pub fn create_depth_texture_with_view(
+pub fn depth_texture_with_view(
     device: &Arc<wgpu::Device>,
     surface_config: &wgpu::SurfaceConfiguration,
 ) -> (wgpu::Texture, wgpu::TextureView) {

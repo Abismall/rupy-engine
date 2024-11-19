@@ -1,3 +1,5 @@
+use wgpu::Device;
+
 use crate::core::error::AppError;
 
 pub enum SamplerType {
@@ -5,6 +7,12 @@ pub enum SamplerType {
     Nearest,
     Default,
     Textured,
+}
+impl SamplerType {
+    pub fn new(&self, device: &Device) -> Result<wgpu::Sampler, AppError> {
+        let sampler = sampler_from_type(device, self)?;
+        Ok(sampler)
+    }
 }
 
 pub fn setup_sampler(
@@ -39,9 +47,9 @@ pub fn setup_sampler(
     });
     Ok(sampler)
 }
-pub fn create_sampler_from_type(
+pub fn sampler_from_type(
     device: &wgpu::Device,
-    sampler_type: SamplerType,
+    sampler_type: &SamplerType,
 ) -> Result<wgpu::Sampler, AppError> {
     let sampler = match sampler_type {
         SamplerType::Linear => setup_sampler(
@@ -90,15 +98,21 @@ pub fn create_sampler_from_type(
             None,
             None,
         )?,
-        SamplerType::Textured => device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        }),
+        SamplerType::Textured => setup_sampler(
+            &device,
+            Some("Texture Sampler".to_string()),
+            Some(wgpu::AddressMode::ClampToEdge),
+            Some(wgpu::AddressMode::ClampToEdge),
+            Some(wgpu::AddressMode::ClampToEdge),
+            Some(wgpu::FilterMode::Linear),
+            Some(wgpu::FilterMode::Linear),
+            Some(wgpu::FilterMode::Linear),
+            Some(0.0),
+            Some(100.0),
+            Some(1),
+            None,
+            None,
+        )?,
     };
     Ok(sampler)
 }

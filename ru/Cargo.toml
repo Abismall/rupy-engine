@@ -32,6 +32,9 @@ itertools = "0.13.0"
 nalgebra = "0.33.2"
 toml = "0.8.19"
 serde_yaml = "0.9.34"
+walkdir = "2.5.0"
+rayon = "1.10.0"
+dashmap = "6.1.0"
 
 
 [build-dependencies]

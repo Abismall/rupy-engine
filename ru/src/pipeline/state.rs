@@ -5,7 +5,7 @@ pub enum PrimitiveType {
     Quad,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum ShadingType {
     Color,
     Texture,
@@ -104,7 +104,7 @@ impl ColorTargetConfig {
             },
             ColorTargetConfig::Add => ColorTargetState {
                 format,
-                blend: Some(BlendState::ALPHA_BLENDING),
+                blend: Some(BlendState::REPLACE),
                 write_mask: ColorWrites::ALL,
             },
             ColorTargetConfig::AlphaBlend => ColorTargetState {

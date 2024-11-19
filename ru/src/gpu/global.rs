@@ -75,8 +75,9 @@ pub fn get_device() -> Result<Arc<Device>, AppError> {
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
     device_cache
         .as_ref()
-        .map(|gpu_device| Arc::clone(&gpu_device.device))
+        .map(|gpu_device| &gpu_device.device)
         .ok_or(AppError::InstanceInitializationError)
+        .cloned()
 }
 pub fn get_adapter() -> Result<Arc<Adapter>, AppError> {
     let device_cache = CACHED_DEVICE
@@ -84,8 +85,9 @@ pub fn get_adapter() -> Result<Arc<Adapter>, AppError> {
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
     device_cache
         .as_ref()
-        .map(|gpu_device| Arc::clone(&gpu_device.adapter))
+        .map(|gpu_device| &gpu_device.adapter)
         .ok_or(AppError::InstanceInitializationError)
+        .cloned()
 }
 pub fn get_instance() -> Result<Arc<Instance>, AppError> {
     let device_cache = CACHED_DEVICE
@@ -93,8 +95,9 @@ pub fn get_instance() -> Result<Arc<Instance>, AppError> {
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
     device_cache
         .as_ref()
-        .map(|gpu_device| Arc::clone(&gpu_device.instance))
+        .map(|gpu_device| &gpu_device.instance)
         .ok_or(AppError::InstanceInitializationError)
+        .cloned()
 }
 
 pub fn get_queue() -> Result<Arc<Queue>, AppError> {
@@ -103,6 +106,7 @@ pub fn get_queue() -> Result<Arc<Queue>, AppError> {
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
     queue_cache
         .as_ref()
-        .map(|gpu_queue| Arc::clone(&gpu_queue.queue))
+        .map(|gpu_queue| &gpu_queue.queue)
         .ok_or(AppError::InstanceInitializationError)
+        .cloned()
 }

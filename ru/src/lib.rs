@@ -9,9 +9,7 @@ pub mod math;
 pub mod pipeline;
 pub mod scene;
 pub mod shader;
-pub mod shape;
 pub mod texture;
-pub mod traits;
 pub mod ui;
 
 pub mod utilities;
@@ -72,11 +70,8 @@ pub mod prelude {
     pub use crate::app::*;
     pub use crate::camera::*;
     pub use crate::core::*;
-    pub use crate::ecs::*;
     pub use crate::events::*;
     pub use crate::input::*;
     pub use crate::math::*;
-    pub use crate::traits::*;
-    pub use crate::ui::*;
     pub use crate::utilities::*;
 }
