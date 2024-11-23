@@ -3,7 +3,7 @@ pub mod manager;
 use crate::{
     core::{error::AppError, files::FileSystem},
     gpu::sampler::{sampler_from_type, SamplerType},
-    log_error,
+    log_debug, log_error,
 };
 use config::{load_texture_config_from_folder, load_texture_image_from_folder};
 use image::GenericImageView;
@@ -17,6 +17,7 @@ pub fn load_texture_by_name(
     format: wgpu::TextureFormat,
 ) -> Result<TextureFile, AppError> {
     let folder = FileSystem::get_texture_base_folder(&name)?;
+    log_debug!("Folder: {:?}", folder);
     let config = load_texture_config_from_folder(&folder)?;
     let image = load_texture_image_from_folder(&folder)?;
     let rgba = image.to_rgba8();

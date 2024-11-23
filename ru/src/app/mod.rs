@@ -2,6 +2,7 @@ use wgpu::{SurfaceCapabilities, TextureFormat};
 
 pub mod context;
 pub mod handler;
+pub mod renderer;
 pub mod rupy;
 pub mod state;
 
