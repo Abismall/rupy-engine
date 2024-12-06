@@ -14,6 +14,12 @@ use crate::events::RupyAppEvent;
 
 #[derive(Debug, Error)]
 pub enum AppError {
+    #[error("Tobj load error {0}")]
+    TobjLoadError(#[from] tobj::LoadError),
+
+    #[error("Resource not found")]
+    ResourceNotFound,
+
     #[error("Scene error: {0}")]
     CreateSceneError(String),
     #[error("Invalid mesh data error: {0}")]
@@ -59,7 +65,8 @@ pub enum AppError {
 
     #[error("File not found: {0}")]
     FileNotFoundError(String),
-
+    #[error("Buffer not found: {0}")]
+    BufferNotFoundError(String),
     #[error("I/O error: {0}")]
     IoError(#[from] io::Error),
 
@@ -70,13 +77,13 @@ pub enum AppError {
     NoSurfaceAvailable,
 
     #[error("No texture provided.")]
-    MissingTexture,
+    TextureNotFound,
 
     #[error("Image format is not supported: {0}")]
     UnsupportedImageFormat(String),
 
     #[error("No sampler provided.")]
-    MissingSampler,
+    SamplerNotFound,
 
     #[error("Image error: {0}")]
     ImageError(#[from] ImageError),

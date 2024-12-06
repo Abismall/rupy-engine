@@ -1,7 +1,7 @@
-pub mod buffer;
 pub mod components;
-pub mod geometry;
-pub mod materials;
-pub mod model;
-pub mod storage;
+pub mod entity;
+pub mod resources;
+pub mod scene;
+pub mod systems;
+pub mod traits;
 pub mod world;

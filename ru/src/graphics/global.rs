@@ -2,8 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use crate::core::error::AppError;
 use once_cell::sync::Lazy;
-use wgpu::Queue;
 use wgpu::{Adapter, Device, Instance, InstanceDescriptor};
+use wgpu::{Features, Queue};
 
 pub struct GPU {
     pub device: Arc<Device>,
@@ -36,14 +36,14 @@ async fn request_adapter(instance: &wgpu::Instance) -> Result<wgpu::Adapter, App
     }
 }
 async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), AppError> {
-    let required_features = wgpu::Features::POLYGON_MODE_LINE
-        | wgpu::Features::POLYGON_MODE_POINT
-        | wgpu::Features::VERTEX_WRITABLE_STORAGE;
-    let required_limits = wgpu::Limits::default();
+    let adapter_features = adapter.features();
+    let desired_features = Features::all_webgpu_mask();
+    let supported_features = adapter_features & desired_features;
+    let required_limits = wgpu::Limits::downlevel_defaults();
     let memory_hints = wgpu::MemoryHints::Performance;
     let desc = wgpu::DeviceDescriptor {
         label: Some("Device"),
-        required_features,
+        required_features: supported_features,
         required_limits,
         memory_hints,
     };

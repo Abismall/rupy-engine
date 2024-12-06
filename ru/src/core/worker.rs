@@ -1,7 +1,7 @@
 use crate::{
     events::{RupyAppEvent, WorkerTaskCompletion},
+    graphics::shaders::loader::list_shader_file_paths,
     log_warning,
-    shader::loader::list_shader_file_paths,
 };
 use crossbeam::channel::{Receiver, Sender};
 

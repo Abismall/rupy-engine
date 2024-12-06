@@ -3,18 +3,16 @@ pub mod camera;
 pub mod core;
 pub mod ecs;
 pub mod events;
-pub mod gpu;
+pub mod graphics;
 pub mod input;
+pub mod logging;
 pub mod math;
-pub mod pipeline;
-pub mod scene;
-pub mod shader;
-pub mod texture;
 pub mod ui;
 
 pub mod utilities;
+
 #[cfg(feature = "logging")]
-pub use core::logging as rupyLogger;
+pub use logging as rupyLogger;
 
 #[cfg(feature = "logging")]
 #[macro_export]

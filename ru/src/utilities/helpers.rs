@@ -4,15 +4,10 @@ use std::hash::{Hash, Hasher};
 
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position},
-    window::{Fullscreen, Window, WindowAttributes},
+    window::{Fullscreen, WindowAttributes},
 };
 
-pub fn window_inner_size_to_vector2(window: &Window) -> nalgebra::Vector2<u32> {
-    let window_size = window.inner_size();
-    nalgebra::Vector2::new(window_size.width.max(1), window_size.height.max(1))
-}
-
-pub fn window_position_logical(
+pub fn window_logical_position(
     window_size: LogicalSize<f64>,
     screen_size: LogicalSize<f64>,
 ) -> Position {
@@ -22,7 +17,7 @@ pub fn window_position_logical(
     Position::Logical(LogicalPosition::new(x, y))
 }
 
-pub fn window_position_physical(
+pub fn window_physical_position(
     window_size: PhysicalSize<u32>,
     screen_size: PhysicalSize<u32>,
 ) -> Position {
@@ -32,10 +27,7 @@ pub fn window_position_physical(
     Position::Physical(PhysicalPosition::new(x as i32, y as i32))
 }
 
-pub fn default_window_attributes(
-    fullscreen: Option<Fullscreen>,
-    title: Option<&str>,
-) -> WindowAttributes {
+pub fn window_attributes(fullscreen: Option<Fullscreen>, title: Option<&str>) -> WindowAttributes {
     WindowAttributes::default()
         .with_fullscreen(fullscreen)
         .with_title(title.unwrap_or("Rupy"))
@@ -64,16 +56,18 @@ pub fn calculate_hashes<T: Hash>(item: &Vec<T>) -> u64 {
 pub fn string_to_u64(s: &str) -> u64 {
     calculate_hash(&s.to_string())
 }
-
-pub fn get_window_attributes() -> (u32, u32, i32, i32) {
+pub fn string_to_u32(s: &str) -> u32 {
+    calculate_hash(&s.to_string()) as u32
+}
+pub fn read_window_attributes_from_env() -> (u32, u32, i32, i32) {
     let width: u32 = env::var("RUPY_ENGINE_WINDOW_WIDTH")
         .ok()
         .and_then(|val| val.parse().ok())
-        .unwrap_or(1000);
+        .unwrap_or(1424);
     let height: u32 = env::var("RUPY_ENGINE_WINDOW_HEIGHT")
         .ok()
         .and_then(|val| val.parse().ok())
-        .unwrap_or(800);
+        .unwrap_or(720);
     let x: i32 = env::var("RUPY_ENGINE_WINDOW_X_ANCHOR")
         .ok()
         .and_then(|val| val.parse().ok())

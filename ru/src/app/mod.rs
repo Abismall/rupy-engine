@@ -1,9 +1,8 @@
 use wgpu::{SurfaceCapabilities, TextureFormat};
 
-pub mod context;
+pub mod app;
+pub mod flags;
 pub mod handler;
-pub mod renderer;
-pub mod rupy;
 pub mod state;
 
 pub fn coalesce_format<'a>(capabilities: &SurfaceCapabilities) -> TextureFormat {

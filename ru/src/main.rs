@@ -3,23 +3,32 @@ use std::sync::Arc;
 use crossbeam::channel::{self, Receiver, Sender};
 
 use rupy::{
-    app::state::AppState,
-    core::{error::AppError, worker::RupyWorker},
+    app::{app::Rupy, flags::BitFlags},
+    core::{
+        error::AppError,
+        worker::{RupyWorker, WorkerTask},
+    },
     events::{
         proxy::{EventBusProxy, EventProxy, EventProxyTrait},
         RupyAppEvent,
     },
-    prelude::{rupy::Rupy, worker::WorkerTask},
     rupyLogger::factory::LogFactory,
 };
 use winit::event_loop::EventLoop;
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
-    #[cfg(feature = "logging")]
-    {
-        let logger = LogFactory::default();
-        let _ = logger.init();
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Debug).expect("Couldn't initialize logger");
+        } else {
+            #[cfg(feature = "logging")]
+            {
+                let logger = LogFactory::default();
+                let _ = logger.init();
+            }
+        }
     }
 
     let (tx, rx): (Sender<RupyAppEvent>, Receiver<RupyAppEvent>) = channel::unbounded();
@@ -38,16 +47,16 @@ async fn main() -> Result<(), AppError> {
     let event_bus_rx = rx.clone();
     let event_bus_proxy = event_proxy.clone();
     let event_bus = EventBusProxy::new(event_bus_rx, event_bus_proxy);
-    let app_state = AppState::empty();
+    let bit_flags = BitFlags::empty();
     let mut rupy = Rupy {
         #[cfg(feature = "logging")]
         logger: LogFactory::default(),
         event_proxy,
         event_tx: arc_tx,
         task_tx,
-        state: app_state,
+        bit_flags: bit_flags,
         debug: rupy::app::DebugMode::None,
-        render_context: None,
+        state: None,
     };
 
     tokio::spawn(async move {

@@ -1,47 +1,70 @@
-use crate::ecs::model::Transform;
+use bytemuck::{Pod, Zeroable};
+use cgmath::{Matrix4, Quaternion, Vector3};
 
-use nalgebra::{Matrix4, Quaternion, Unit, UnitQuaternion, Vector3};
+use crate::{
+    core::{cache::HashCache, error::AppError},
+    ecs::traits::Cache,
+};
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Transform {
+    pub position: [f32; 3],
+    pub rotation: Quaternion<f32>, // Use Quaternion for rotation
+    pub scale: [f32; 3],
+}
 
 impl Transform {
-    pub fn rotate(&mut self) {
-        let axis = Vector3::new(self.position[0], self.position[1], self.position[2]);
-        let angle = std::f32::consts::FRAC_PI_4;
-
-        let unit_axis = Unit::new_normalize(axis);
-
-        self.rotation = *UnitQuaternion::from_axis_angle(&unit_axis, angle);
-    }
-    pub fn update(&mut self, delta_time: f32) {
-        self.rotate();
-        self.scale(delta_time);
-        self.translate(delta_time);
-    }
-    pub fn translate(&mut self, delta_time: f32) {
-        for i in 0..3 {
-            self.position[i] += self.velocity[i] * delta_time;
-        }
-    }
-    pub fn scale(&mut self, delta_time: f32) {
-        let scale_delta = 1.0 * delta_time;
-        for i in 0..3 {
-            self.scale[i] += scale_delta;
-        }
-    }
     pub fn to_model_matrix(&self) -> Matrix4<f32> {
-        Matrix4::new_translation(&Vector3::new(
+        let translation = Matrix4::from_translation(Vector3::new(
             self.position[0],
             self.position[1],
             self.position[2],
-        )) * Matrix4::new_nonuniform_scaling(&Vector3::new(
-            self.scale[0],
-            self.scale[1],
-            self.scale[2],
-        )) * UnitQuaternion::from_quaternion(Quaternion::new(
-            self.rotation[3], // w
-            self.rotation[0], // x
-            self.rotation[1], // y
-            self.rotation[2], // z
-        ))
-        .to_homogeneous()
+        ));
+
+        let rotation = Matrix4::from(self.rotation);
+
+        let scale = Matrix4::from_nonuniform_scale(self.scale[0], self.scale[1], self.scale[2]);
+
+        translation * rotation * scale
+    }
+}
+#[derive(Debug, Clone)]
+pub struct TransformManager {
+    cache: HashCache<Transform>,
+}
+
+impl TransformManager {
+    pub fn new() -> Self {
+        TransformManager {
+            cache: HashCache::new(),
+        }
+    }
+
+    pub fn insert(&mut self, id: u64, transform: Transform) -> Result<(), AppError> {
+        self.cache.put(id, transform)
+    }
+
+    pub fn get(&self, id: u64) -> Option<&Transform> {
+        self.cache.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut Transform> {
+        self.cache.get_mut(id)
+    }
+
+    pub fn get_or_create<F>(&mut self, id: u64, create_fn: F) -> Result<&mut Transform, AppError>
+    where
+        F: FnOnce() -> Result<Transform, AppError>,
+    {
+        self.cache.get_or_create(id, create_fn)
+    }
+
+    pub fn remove(&mut self, id: u64) {
+        self.cache.remove(id);
+    }
+
+    pub fn contains(&self, id: u64) -> bool {
+        self.cache.contains(id)
     }
 }

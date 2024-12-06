@@ -1,18 +1,13 @@
 use std::sync::Arc;
 use wgpu::{Adapter, Device, Instance, Queue};
 
-use crate::{
-    core::surface::RenderSurface,
-    graphics::global::{get_adapter, get_device, get_instance, get_queue},
-};
+use super::global::{get_adapter, get_device, get_instance, get_queue};
 
 pub struct GpuContext {
     device: Arc<Device>,
     queue: Arc<Queue>,
     adapter: Arc<Adapter>,
     instance: Arc<Instance>,
-
-    target: Option<RenderSurface>,
 }
 impl GpuContext {
     pub async fn new() -> Self {
@@ -22,7 +17,6 @@ impl GpuContext {
             queue,
             adapter,
             instance,
-            target: None,
         }
     }
     async fn get_cached_context() -> (
@@ -51,12 +45,5 @@ impl GpuContext {
     }
     pub fn submit(&self, command_buffer: wgpu::CommandBuffer) {
         self.queue.submit(Some(command_buffer));
-    }
-    pub fn set_surface(&mut self, surface: RenderSurface) {
-        self.target = Some(surface);
-    }
-
-    pub fn surface(&self) -> Option<&RenderSurface> {
-        self.target.as_ref()
     }
 }

@@ -1,36 +1,43 @@
-use std::sync::Arc;
 use wgpu::{
-    Adapter, CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat,
+    CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat,
     TextureUsages,
 };
-use winit::window::Window;
+use winit::dpi::PhysicalSize;
 
-use crate::{app::coalesce_format, prelude::helpers::window_inner_size_to_vector2};
-
-pub struct RenderSurface {
-    pub surface: Surface<'static>,
-    pub surface_config: SurfaceConfiguration,
-    pub window: Arc<Window>,
+pub struct RenderSurface<'a> {
+    pub surface: Surface<'a>,
+    pub config: SurfaceConfiguration,
 }
 
-impl RenderSurface {
-    pub fn new(
-        window: Arc<Window>,
+impl<'a> RenderSurface<'a> {
+    pub fn new(surface: Surface<'a>, size: PhysicalSize<u32>, adapter: &wgpu::Adapter) -> Self {
+        let surface_caps = surface.get_capabilities(&adapter);
 
-        surface: Surface<'static>,
-        surface_config: SurfaceConfiguration,
-    ) -> Self {
-        Self {
-            surface,
-            surface_config,
-            window,
-        }
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![surface_format.add_srgb_suffix()],
+            desired_maximum_frame_latency: 2,
+        };
+        Self { surface, config }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32, device: &Device) {
-        self.surface_config.width = width.max(1);
-        self.surface_config.height = height.max(1);
-        configure_surface(&self.surface, device, &self.surface_config);
+    pub fn resize(&mut self, device: &wgpu::Device, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.config.width = new_size.width;
+            self.config.height = new_size.height;
+            self.surface.configure(&device, &self.config);
+        }
     }
 
     pub fn get_current_texture(&self) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
@@ -50,34 +57,11 @@ pub fn surface_configuration(
     SurfaceConfiguration {
         usage,
         format,
-        width,
-        height,
+        width: width.max(1),
+        height: height.max(1),
         present_mode,
         alpha_mode,
         view_formats,
         desired_maximum_frame_latency,
     }
-}
-
-pub fn default_surface_configuration(
-    surface: &Surface,
-    adapter: &Adapter,
-    window: &Window,
-) -> SurfaceConfiguration {
-    let surface_size = window_inner_size_to_vector2(window);
-    let surface_caps = surface.get_capabilities(adapter);
-    surface_configuration(
-        coalesce_format(&surface_caps),
-        surface_size.x,
-        surface_size.y,
-        PresentMode::FifoRelaxed,
-        surface_caps.alpha_modes[0],
-        TextureUsages::RENDER_ATTACHMENT,
-        (&[]).to_vec(),
-        1,
-    )
-}
-
-pub fn configure_surface(surface: &Surface, device: &Device, config: &SurfaceConfiguration) {
-    surface.configure(device, &config);
 }
