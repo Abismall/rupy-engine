@@ -5,8 +5,9 @@ use crate::graphics::{
 use image::codecs::hdr::HdrDecoder;
 use std::io::Cursor;
 use wgpu::{Operations, TextureFormat};
+use winit::dpi::PhysicalSize;
 
-use crate::{core::error::AppError, graphics::binding::texture};
+use crate::core::error::AppError;
 
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -70,7 +71,7 @@ impl HdrPipeline {
             ],
         });
 
-        let shader = wgpu::include_wgsl!("../../assets/shaders/hdr.wgsl");
+        let shader = wgpu::include_wgsl!("../../assets/shaders/effects/tone_mapping.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&layout],
@@ -101,14 +102,13 @@ impl HdrPipeline {
     pub fn resize(
         &mut self,
         device: &wgpu::Device,
-        width: u32,
-        height: u32,
+        size: PhysicalSize<u32>,
         format: TextureFormat,
     ) {
         self.texture = Texture::create_2d_texture(
             device,
-            width,
-            height,
+            size.width,
+            size.height,
             format,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::FilterMode::Nearest,
@@ -128,8 +128,8 @@ impl HdrPipeline {
                 },
             ],
         });
-        self.width = width;
-        self.height = height;
+        self.width = size.width;
+        self.height = size.height;
     }
 
     pub fn view(&self) -> &wgpu::TextureView {
@@ -170,7 +170,7 @@ pub struct HdrLoader {
 impl HdrLoader {
     pub fn new(device: &wgpu::Device) -> Self {
         let module = device.create_shader_module(wgpu::include_wgsl!(
-            "../../assets/shaders/equirectangular.wgsl"
+            "../../assets/shaders/compute/equirectangular.wgsl"
         ));
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

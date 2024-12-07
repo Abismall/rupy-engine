@@ -1,30 +1,17 @@
+use crate::{
+    core::{cache::ComponentCacheKey, error::AppError},
+    ecs::{
+        components::{instance::model::InstanceRaw, model::model::ModelVertex},
+        traits::{Cache, Vertex},
+    },
+    graphics::{binding::BindGroupLayouts, shaders::manager::ShaderManager, PrimitiveTopology},
+};
 use wgpu::{ColorTargetState, DepthStencilState, Device, RenderPipeline};
 
-use crate::{
-    core::error::AppError,
-    graphics::shaders::{manager::ShaderManager, module::RupyShader},
-};
-
 use super::{
-    get_pipeline_label, render_pipeline, DepthType, PrimitiveStateConfig, PrimitiveType,
-    ShadingType,
+    get_pipeline_label, manager::PipelineManager, render_pipeline, DepthType, PrimitiveStateConfig,
+    PrimitiveType, ShadingType,
 };
-
-fn load_shaders(
-    shader_manager: &mut ShaderManager,
-    device: &Device,
-    vertex_path: &str,
-    fragment_path: &str,
-) -> Result<(std::sync::Arc<RupyShader>, std::sync::Arc<RupyShader>), AppError> {
-    let vertex_shader = shader_manager
-        .get_or_create(device, vertex_path, "vs_main".into(), "fs_main".into())?
-        .clone();
-    let fragment_shader = shader_manager
-        .get_or_create(device, fragment_path, "vs_main".into(), "fs_main".into())?
-        .clone();
-
-    Ok((vertex_shader, fragment_shader))
-}
 
 pub fn create_pipeline(
     shader_manager: &mut ShaderManager,
@@ -51,13 +38,16 @@ pub fn create_pipeline(
         ),
     };
 
-    let (vertex_shader, fragment_shader) = load_shaders(
-        shader_manager,
+    let vert_shader = shader_manager.load_shader(
         device,
+        ComponentCacheKey::from(vertex_shader_path),
         vertex_shader_path,
+    )?;
+    let frag_shader = shader_manager.load_shader(
+        device,
+        ComponentCacheKey::from(fragment_shader_path),
         fragment_shader_path,
     )?;
-
     let depth_stencil_state = match depth_type {
         DepthType::Depth => Some(depth_stencil_state),
         DepthType::NoDepth => None,
@@ -80,8 +70,8 @@ pub fn create_pipeline(
         uniform_layout,
         instance_layout,
         texture_layout,
-        &vertex_shader.module,
-        &fragment_shader.module,
+        &vert_shader.module,
+        &frag_shader.module,
         depth_stencil_state,
         color_target,
         primitive_state.to_primitive_state(),
@@ -123,11 +113,8 @@ pub fn create_render_pipeline(
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
-            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
             polygon_mode: wgpu::PolygonMode::Fill,
-            // Requires Features::DEPTH_CLIP_CONTROL
             unclipped_depth: false,
-            // Requires Features::CONSERVATIVE_RASTERIZATION
             conservative: false,
         },
         depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
@@ -142,9 +129,114 @@ pub fn create_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        // If the pipeline will be used with a multiview render pass, this
-        // indicates how many array layers the attachments will have.
+
         multiview: None,
         cache: None,
     })
+}
+pub fn setup_pipeline_manager(
+    device: &wgpu::Device,
+    depth_format: Option<wgpu::TextureFormat>,
+    bind_group_layouts: &BindGroupLayouts,
+    hdr_format: wgpu::TextureFormat,
+) -> Result<PipelineManager, AppError> {
+    let mut pipeline_manager = PipelineManager::new();
+
+    let normal_shader = wgpu::ShaderModuleDescriptor {
+        label: Some("Normal Shader"),
+        source: wgpu::ShaderSource::Wgsl(
+            include_str!("../../assets/shaders/core/normal.wgsl").into(),
+        ),
+    };
+
+    let light_shader = wgpu::ShaderModuleDescriptor {
+        label: Some("Light Shader"),
+        source: wgpu::ShaderSource::Wgsl(
+            include_str!("../../assets/shaders/core/lighting.wgsl").into(),
+        ),
+    };
+
+    for topology in [
+        PrimitiveTopology::PointList,
+        PrimitiveTopology::LineList,
+        PrimitiveTopology::LineStrip,
+        PrimitiveTopology::TriangleList,
+        PrimitiveTopology::TriangleStrip,
+    ] {
+        let topology_label = topology.label();
+
+        let normal_pipeline_id =
+            ComponentCacheKey::from(format!("{}_pipeline", topology_label).as_str());
+        pipeline_manager.get_or_create(normal_pipeline_id, || {
+            let render_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Normal Render Pipeline Layout"),
+                    bind_group_layouts: &[
+                        &bind_group_layouts.texture_bind_group_layout,
+                        &bind_group_layouts.camera_bind_group_layout,
+                        &bind_group_layouts.light_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+            Ok(create_render_pipeline(
+                &device,
+                &render_pipeline_layout,
+                hdr_format,
+                depth_format,
+                &[ModelVertex::desc(), InstanceRaw::desc()],
+                topology.to_wgpu_topology(),
+                normal_shader.clone(),
+            ))
+        })?;
+
+        let light_pipeline_id =
+            ComponentCacheKey::from(format!("{}_light_pipeline", topology_label).as_str());
+        pipeline_manager.get_or_create(light_pipeline_id, || {
+            let render_pipeline_layout =
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Light Render Pipeline Layout"),
+                    bind_group_layouts: &[
+                        &bind_group_layouts.camera_bind_group_layout,
+                        &bind_group_layouts.light_bind_group_layout,
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+            Ok(create_render_pipeline(
+                &device,
+                &render_pipeline_layout,
+                hdr_format,
+                depth_format,
+                &[ModelVertex::desc()],
+                topology.to_wgpu_topology(),
+                light_shader.clone(),
+            ))
+        })?;
+    }
+
+    let sky_pipeline_id = ComponentCacheKey::from("sky_pipeline");
+    pipeline_manager.get_or_create(sky_pipeline_id, || {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Sky Pipeline Layout"),
+            bind_group_layouts: &[
+                &bind_group_layouts.camera_bind_group_layout,
+                &bind_group_layouts.environment_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let shader = wgpu::include_wgsl!("../../assets/shaders/objects/skybox.wgsl");
+        Ok(create_render_pipeline(
+            &device,
+            &layout,
+            hdr_format,
+            depth_format,
+            &[],
+            wgpu::PrimitiveTopology::TriangleList,
+            shader,
+        ))
+    })?;
+
+    Ok(pipeline_manager)
 }

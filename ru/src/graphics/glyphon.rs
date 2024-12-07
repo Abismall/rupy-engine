@@ -6,7 +6,7 @@ use glyphon::{Resolution, TextBounds};
 use wgpu::{Device, Queue, RenderPass, SurfaceConfiguration};
 
 use crate::app::DebugMode;
-use crate::prelude::frame::FrameTime;
+use crate::prelude::frame::FrameMetrics;
 
 pub struct GlyphonRender {
     font_system: FontSystem,
@@ -201,15 +201,15 @@ impl GlyphonRender {
             .shape_until_scroll(&mut self.font_system, false);
     }
 
-    pub fn debug(&mut self, debug_mode: DebugMode, frame_time: &FrameTime) {
+    pub fn update_debug_buffer(&mut self, debug_mode: &DebugMode, frame_metrics: &FrameMetrics) {
         match debug_mode {
             DebugMode::None => {}
             DebugMode::Minimal => {
-                self.fps([25.0, 10.0], frame_time.fps);
+                self.fps([25.0, 10.0], frame_metrics.fps);
             }
             DebugMode::Verbose => {
-                self.fps([25.0, 10.0], frame_time.fps);
-                self.frame_time([25.0, 30.0], frame_time);
+                self.fps([25.0, 10.0], frame_metrics.fps);
+                self.frame_metrics([25.0, 30.0], frame_metrics);
             }
         }
         self.glyphon_buffer
@@ -227,9 +227,9 @@ impl GlyphonRender {
         );
     }
 
-    pub fn frame_time(&mut self, position: [f32; 2], frame_time: &FrameTime) {
+    pub fn frame_metrics(&mut self, position: [f32; 2], frame_metrics: &FrameMetrics) {
         self.push_buffer_lines(
-            &format!("Delta: {}", frame_time.delta_time),
+            &format!("Delta: {}", frame_metrics.delta_time),
             [position[0], position[1]],
             None,
             Some(LineEnding::Lf),

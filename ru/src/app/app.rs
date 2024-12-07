@@ -7,7 +7,7 @@ use crate::{
 };
 use std::sync::Arc;
 
-use super::{flags::BitFlags, state::State, DebugMode};
+use super::state::State;
 use crossbeam::channel::Sender;
 
 use winit::{event_loop::ActiveEventLoop, window::WindowAttributes};
@@ -21,8 +21,6 @@ pub struct Rupy<'a> {
     pub task_tx: Sender<WorkerTask>,
     #[cfg(feature = "logging")]
     pub logger: rupyLogger::factory::LogFactory,
-    pub debug: DebugMode,
-    pub bit_flags: BitFlags,
 
     pub state: Option<State<'a>>,
 }
@@ -36,23 +34,25 @@ impl<'a> Rupy<'a> {
             .send(task)
             .map_err(AppError::TaskQueueSendError)
     }
-    pub fn update(&mut self) {
-        if self.bit_flags.is_running() {
-            if let Some(state) = &mut self.state {
-                state.renderer.ctx.update();
-            };
-        }
-    }
 }
 
 impl<'a> Rupy<'a> {
-    pub fn shutdown(&mut self, event_loop: &ActiveEventLoop) {
+    pub fn shutdown(event_loop: &ActiveEventLoop) {
         if event_loop.exiting() {
             return;
         } else {
             log_info!("Exit");
             event_loop.exit();
         };
+    }
+    pub fn update(&self, state: Option<&mut State>) {
+        if let Some(state) = state {
+            if !state.bit_flags.is_running() {
+                return;
+            } else {
+                state.renderer.ctx.compute();
+            }
+        }
     }
 
     pub async fn initialize(&mut self) -> Result<(), AppError> {

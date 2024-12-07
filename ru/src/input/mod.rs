@@ -1,6 +1,23 @@
 pub use winit::event;
-use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 pub mod action;
+
+pub fn process_input_events<F>(event: &WindowEvent, process_fn: F)
+where
+    F: FnOnce(),
+{
+    match event {
+        WindowEvent::CursorMoved { .. }
+        | WindowEvent::KeyboardInput { .. }
+        | WindowEvent::MouseWheel {
+            delta: MouseScrollDelta::PixelDelta(_) | MouseScrollDelta::LineDelta(_, _),
+            ..
+        } => {
+            process_fn();
+        }
+        _ => {}
+    }
+}
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub enum InputContext {

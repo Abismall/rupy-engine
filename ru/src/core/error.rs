@@ -19,7 +19,8 @@ pub enum AppError {
 
     #[error("Resource not found")]
     ResourceNotFound,
-
+    #[error("Resource already exists")]
+    DuplicateResource,
     #[error("Scene error: {0}")]
     CreateSceneError(String),
     #[error("Invalid mesh data error: {0}")]

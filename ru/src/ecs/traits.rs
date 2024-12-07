@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    core::error::AppError,
+    core::{cache::ComponentCacheKey, error::AppError},
     ecs::components::{mesh::model::Mesh, model::model::Model},
 };
 
@@ -22,7 +22,6 @@ pub trait Vertex {
 pub trait RenderPassDraw<'a> {
     fn draw_model(
         &mut self,
-        cache_id: u64,
         model: &Model,
         bind_groups: &[&'a wgpu::BindGroup],
         instances: Option<Range<u32>>,
@@ -32,11 +31,11 @@ pub trait RenderPassDraw<'a> {
 
     fn draw_mesh(
         &mut self,
-        cache_id: u64,
-        mesh: &'a Mesh,
-        bind_groups: &[&'a wgpu::BindGroup],
+        vertex_buffer: &wgpu::Buffer,
+        index_buffer: &wgpu::Buffer,
+        mesh: &Mesh,
+        bind_groups: &[&wgpu::BindGroup],
         instances: Option<Range<u32>>,
-        buffer_manager: BufferManager,
     );
 
     fn draw_vertices(
@@ -47,12 +46,12 @@ pub trait RenderPassDraw<'a> {
     );
 }
 pub trait Cache<R> {
-    fn get(&self, id: u64) -> Option<&R>;
-    fn contains(&self, id: u64) -> bool;
-    fn get_mut(&mut self, id: u64) -> Option<&mut R>;
-    fn get_or_create<F>(&mut self, id: u64, create_fn: F) -> Result<&mut R, AppError>
+    fn get(&self, id: ComponentCacheKey) -> Option<&R>;
+    fn contains(&self, id: ComponentCacheKey) -> bool;
+    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut R>;
+    fn get_or_create<F>(&mut self, id: ComponentCacheKey, create_fn: F) -> Result<&mut R, AppError>
     where
         F: FnOnce() -> Result<R, AppError>;
-    fn put(&mut self, id: u64, resource: R) -> Result<(), AppError>;
-    fn remove(&mut self, id: u64);
+    fn put(&mut self, id: ComponentCacheKey, resource: R) -> Result<(), AppError>;
+    fn remove(&mut self, id: ComponentCacheKey);
 }

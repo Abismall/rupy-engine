@@ -102,7 +102,32 @@ impl FileSystem {
             }
         }
     }
+    pub fn get_path_for_type(file_type: FileType, file_name: &str) -> Result<PathBuf, AppError> {
+        let base_dir = match file_type {
+            FileType::Image => Self::get_textures_dir()?,
+        };
+        Ok(base_dir.join(file_name))
+    }
 
+    pub fn load_or_create<F>(
+        file_type: FileType,
+        file_name: &str,
+        create_fn: F,
+    ) -> Result<String, AppError>
+    where
+        F: FnOnce(&Path) -> Result<String, AppError>,
+    {
+        let path = Self::get_path_for_type(file_type, file_name)?;
+        if path.exists() {
+            log_info!("File exists, reading: {:?}", path);
+            return Self::read_to_string(&path).map_err(|e| e.into());
+        }
+
+        log_info!("File does not exist, creating: {:?}", path);
+        let content = create_fn(&path)?;
+        Self::write_to_file(&path, &content)?;
+        Ok(content)
+    }
     pub fn read_image_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, image::ImageError> {
         let image = image::open(path.as_ref())?;
         let rgba_image = image.to_rgba8();

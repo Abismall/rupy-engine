@@ -8,40 +8,51 @@ use crate::{
     prelude::constant::WGSL_SHADER_EXT,
 };
 
-use super::module::{create_shader_module_from_path, RupyShader};
+use super::module::{read_shader_source_from_path, RupyShader};
 
 pub fn load_wgsl_shader_to_naga_module(shader_code: &str) -> Result<naga::Module, AppError> {
     Ok(wgsl::parse_str(shader_code)?)
 }
+fn extract_main_fn_name(source: &str, annotation: &str) -> Option<String> {
+    for line in source.lines() {
+        if line.contains(annotation) {
+            if let Some(start) = line.find("fn ") {
+                let after_fn = &line[start + 3..];
+                if let Some(end) = after_fn.find('(') {
+                    return Some(after_fn[..end].trim().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn from_path_slice<P: AsRef<Path> + std::fmt::Debug>(
     device: &wgpu::Device,
     path: P,
-    vs_main: &str,
-    fs_main: &str,
 ) -> Result<RupyShader, AppError> {
     let path_string = path.as_ref().to_string_lossy().to_string();
-    let (module, source_string) = create_shader_module_from_path(device, path)?;
+    let source_string = read_shader_source_from_path(path)?;
     Ok(RupyShader {
-        module: module.into(),
-        source: source_string,
+        module: device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(source_string.into()),
+        }),
         path: path_string,
-        fs_main: (*fs_main).to_string(),
-        vs_main: (*vs_main).to_string(),
+        vs_main: "vs_main".to_string(),
+        fs_main: "fs_main".to_string(),
     })
 }
-pub fn from_path_string(
-    device: &wgpu::Device,
-    path: &str,
-    vs_main: String,
-    fs_main: String,
-) -> Result<RupyShader, AppError> {
-    let (module, source_string) = create_shader_module_from_path(device, path)?;
+pub fn from_path_string(device: &wgpu::Device, path: &str) -> Result<RupyShader, AppError> {
+    let source_string = read_shader_source_from_path(path)?;
     Ok(RupyShader {
-        module: module.into(),
-        source: source_string,
+        module: device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(source_string.into()),
+        }),
         path: String::from(path),
-        fs_main,
-        vs_main,
+        vs_main: "vs_main".to_string(),
+        fs_main: "fs_main".to_string(),
     })
 }
 pub fn list_shader_file_paths() -> std::result::Result<Vec<String>, AppError> {

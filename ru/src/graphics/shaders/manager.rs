@@ -1,62 +1,81 @@
+use crate::core::cache::ComponentCacheKey;
 use crate::core::error::AppError;
+use crate::ecs::traits::Cache;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use super::{
-    loader::{from_path_string, list_shader_file_paths},
-    module::RupyShader,
-};
+use super::module::RupyShader;
 
-#[derive(Debug)]
 pub struct ShaderManager {
-    pub shaders: HashMap<String, Arc<RupyShader>>,
+    shaders: HashMap<ComponentCacheKey, RupyShader>,
 }
 
 impl ShaderManager {
     pub fn new() -> Self {
-        let shaders = HashMap::with_capacity(50);
-        Self { shaders }
+        Self {
+            shaders: HashMap::new(),
+        }
     }
 
-    pub async fn async_load_shaders(&mut self, device: &wgpu::Device) -> Result<(), AppError> {
-        for path in list_shader_file_paths()? {
-            self.insert_shader_from_path(device, &path, "vs_main".into(), "fs_main".into())?;
-        }
-        Ok(())
-    }
-
-    pub fn load_shaders(&mut self, device: &wgpu::Device) -> Result<(), AppError> {
-        for shader_path in list_shader_file_paths()? {
-            self.insert_shader_from_path(device, &shader_path, "vs_main".into(), "fs_main".into())?;
-        }
-        Ok(())
-    }
-    pub fn get_or_create(
+    pub fn load_shader(
         &mut self,
         device: &wgpu::Device,
-        path: &str,
-        vs_main: String,
-        fs_main: String,
-    ) -> Result<std::sync::Arc<RupyShader>, AppError> {
-        if let Some(cached) = self.shaders.get(path) {
-            return Ok(Arc::clone(cached));
-        } else {
-            match self.insert_shader_from_path(device, path, vs_main, fs_main) {
-                Ok(new_shader) => return Ok(new_shader),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-    pub fn insert_shader_from_path(
-        &mut self,
-        device: &wgpu::Device,
+        shader_id: ComponentCacheKey,
         shader_path: &str,
-        vs_main: String,
-        fs_main: String,
-    ) -> Result<Arc<RupyShader>, AppError> {
-        let shader = Arc::new(from_path_string(device, shader_path, vs_main, fs_main)?);
-        self.shaders.insert(shader_path.to_string(), shader.clone());
-        Ok(shader)
+    ) -> Result<(), AppError> {
+        let shader = super::loader::from_path_string(device, shader_path)?;
+        self.put(shader_id, shader)?;
+        Ok(())
+    }
+
+    pub fn list_shaders(&self) -> Vec<ComponentCacheKey> {
+        self.shaders.keys().copied().collect()
+    }
+    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut RupyShader> {
+        Some(self.shaders.get_mut(&id)?)
+    }
+}
+
+impl Cache<RupyShader> for ShaderManager {
+    fn get(&self, id: ComponentCacheKey) -> Option<&RupyShader> {
+        self.shaders.get(&id)
+    }
+
+    fn contains(&self, id: ComponentCacheKey) -> bool {
+        self.shaders.contains_key(&id)
+    }
+
+    fn put(
+        &mut self,
+        id: ComponentCacheKey,
+        resource: RupyShader,
+    ) -> std::result::Result<(), AppError> {
+        if self.contains(id) {
+            return Err(AppError::DuplicateResource);
+        }
+        self.shaders.insert(id, resource);
+        Ok(())
+    }
+
+    fn remove(&mut self, id: ComponentCacheKey) {
+        self.shaders.remove(&id);
+    }
+    fn get_or_create<F>(
+        &mut self,
+        shader_id: ComponentCacheKey,
+        create_fn: F,
+    ) -> std::result::Result<&mut RupyShader, AppError>
+    where
+        F: FnOnce() -> Result<RupyShader, AppError>,
+    {
+        if !self.contains(shader_id) {
+            let shader = create_fn()?;
+            self.put(shader_id, shader.into())?;
+        }
+        self.get_mut(shader_id).ok_or(AppError::ResourceNotFound)
+    }
+
+    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut RupyShader> {
+        todo!()
     }
 }

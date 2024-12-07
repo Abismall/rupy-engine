@@ -1,5 +1,23 @@
+use binding::BindGroupLayouts;
+use pipelines::{manager::PipelineManager, setup::setup_pipeline_manager};
+use shaders::manager::ShaderManager;
+use textures::Texture;
+
+use crate::{
+    core::error::AppError,
+    ecs::{
+        components::{
+            material::manager::MaterialManager, mesh::manager::MeshManager,
+            model::manager::ModelManager, transform::manager::TransformManager,
+        },
+        systems::render::BufferManager,
+    },
+    log_error,
+};
+
 pub mod binding;
 pub mod context;
+pub mod depth;
 pub mod geometry;
 pub mod global;
 pub mod glyphon;
@@ -7,6 +25,44 @@ pub mod model;
 pub mod pipelines;
 pub mod shaders;
 pub mod textures;
+pub struct ResourceManager {
+    pub model_manager: ModelManager,
+    pub mesh_manager: MeshManager,
+    pub material_manager: MaterialManager,
+    pub buffer_manager: BufferManager,
+    pub transform_manager: TransformManager,
+    pub pipeline_manager: PipelineManager,
+    pub shader_manager: ShaderManager,
+}
+impl ResourceManager {
+    pub fn new(
+        device: &wgpu::Device,
+        bind_group_layouts: &BindGroupLayouts,
+        hdr_format: wgpu::TextureFormat,
+    ) -> Result<Self, AppError> {
+        let pipeline_manager = match setup_pipeline_manager(
+            device,
+            Some(Texture::DEPTH_FORMAT),
+            &bind_group_layouts,
+            hdr_format,
+        ) {
+            Ok(pipelines) => pipelines,
+            Err(e) => {
+                log_error!("Failed to setup pipeline manager: {:?}", e);
+                return Err(e);
+            }
+        };
+        Ok(Self {
+            pipeline_manager,
+            material_manager: MaterialManager::new(),
+            mesh_manager: MeshManager::new(),
+            model_manager: ModelManager::new(),
+            transform_manager: TransformManager::new(),
+            buffer_manager: BufferManager::new(),
+            shader_manager: ShaderManager::new(),
+        })
+    }
+}
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum PrimitiveTopology {
     PointList,

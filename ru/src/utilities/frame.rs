@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
-pub struct FrameTime {
+pub struct FrameMetrics {
     pub last_frame_time: Instant,
     pub frame_time_accumulator: Duration,
     pub frame_count: u32,
@@ -9,7 +9,7 @@ pub struct FrameTime {
     pub delta_time: f32,
 }
 
-impl FrameTime {
+impl FrameMetrics {
     pub fn new() -> Self {
         Self {
             last_frame_time: Instant::now(),

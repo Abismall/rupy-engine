@@ -1,84 +1,89 @@
 use std::{collections::HashMap, ops::Range};
 
-use wgpu::{util::DeviceExt, Buffer, BufferUsages, DepthStencilState};
+use cgmath::Vector3;
+use wgpu::{util::DeviceExt, BindGroup, Buffer, BufferUsages};
+use winit::dpi::PhysicalSize;
 
 use crate::{
     app::DebugMode,
-    camera::{projection::Projection, Camera},
-    core::{cache::CacheId, error::AppError, surface::RenderSurface},
+    camera::{frustum::Frustum, CameraHandler},
+    core::{cache::ComponentCacheKey, error::AppError, surface::RenderSurface},
     ecs::{
         components::{
             instance::model::{Instance, InstanceRaw},
             mesh::{manager::MeshManager, model::Mesh},
-            model::{model::Model, prepare_model_bind_groups},
+            model::model::Model,
+            IntoComponentCacheKey,
         },
-        resources::ResourceManager,
         traits::{BufferCreator, Cache, RenderPassDraw},
         world::World,
     },
     graphics::{
         binding::{
-            BindGroupLayouts, SharedBindGroups, INDEX_CAMERA_BIND_GROUP,
-            INDEX_ENVIRONMENT_BIND_GROUP, INDEX_LIGHT_BIND_GROUP,
+            BindGroupLayouts, INDEX_CAMERA_BIND_GROUP, INDEX_ENVIRONMENT_BIND_GROUP,
+            INDEX_LIGHT_BIND_GROUP,
         },
-        context::GpuContext,
+        context::GpuResourceCache,
+        depth::DepthBuffer,
         glyphon::GlyphonRender,
         model::{CameraUniform, LightUniform, VertexType},
         pipelines::hdr,
-        textures::Texture,
-        PrimitiveTopology,
+        PrimitiveTopology, ResourceManager,
     },
-    log_info, log_warning,
-    prelude::frame::FrameTime,
+    log_debug, log_info, log_warning,
+    prelude::frame::FrameMetrics,
 };
 pub struct Renderer3D {
     pub ctx: RenderInfo,
     pub hdr: hdr::HdrPipeline,
-    pub depth_texture: Texture,
-    pub depth_stencil: DepthStencilState,
+    pub depth_buffer: DepthBuffer,
     pub glyphon: GlyphonRender,
     pub bind_group_layouts: BindGroupLayouts,
-    pub shared_bind_groups: SharedBindGroups,
+    pub bind_groups: Vec<BindGroup>,
 }
 
 impl Renderer3D {
     pub fn new(
         ctx: RenderInfo,
         hdr: hdr::HdrPipeline,
-        depth_texture: Texture,
-        depth_stencil: DepthStencilState,
+        depth_buffer: DepthBuffer,
         glyphon: GlyphonRender,
         bind_group_layouts: BindGroupLayouts,
-        shared_bind_groups: SharedBindGroups,
+        bind_groups: Vec<BindGroup>,
     ) -> Self {
         Self {
             ctx,
             hdr,
-            depth_texture,
-            depth_stencil,
+            depth_buffer,
             glyphon,
             bind_group_layouts,
-            shared_bind_groups,
+            bind_groups,
         }
     }
 
     pub fn render(
         &mut self,
-        gpu: &GpuContext,
+        gpu: &GpuResourceCache,
         target: &RenderSurface,
         world: &mut World,
         resources: &mut ResourceManager,
+        camera_handler: &CameraHandler,
     ) -> Result<(), wgpu::SurfaceError> {
         let output = target.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
+        let device = gpu.device();
+        let queue = gpu.queue();
         let mut encoder = gpu
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        let view_proj_matrix =
+            camera_handler.camera.view_matrix() * camera_handler.projection.calc_matrix();
+        let frustum = Frustum::from_view_projection_matrix(view_proj_matrix.into());
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -97,7 +102,7 @@ impl Renderer3D {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
+                    view: &self.depth_buffer.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -107,84 +112,59 @@ impl Renderer3D {
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
-
             let pipeline_label = self.ctx.render_mode().label();
-            let sky_pipeline = resources
-                .pipeline_manager
-                .get(CacheId::from("sky_pipeline").value())
-                .expect("Sky pipeline not found");
-            let render_pipeline = resources
-                .pipeline_manager
-                .get(CacheId::from(format!("{}_pipeline", pipeline_label).as_str()).value())
-                .expect("Render pipeline not found for topology");
+            let bind_groups = (
+                &self.bind_groups[INDEX_CAMERA_BIND_GROUP as usize],
+                &self.bind_groups[INDEX_ENVIRONMENT_BIND_GROUP as usize],
+                &self.bind_groups[INDEX_LIGHT_BIND_GROUP as usize],
+            );
+
+            render_pass.set_pipeline(
+                &resources
+                    .pipeline_manager
+                    .get(ComponentCacheKey::from("sky_pipeline"))
+                    .expect("Sky pipeline not found"),
+            );
+
+            render_pass.draw_vertices(&[bind_groups.0, bind_groups.1], 0..3, Some(0..1));
             let light_pipeline = resources
                 .pipeline_manager
-                .get(CacheId::from(format!("{}_light_pipeline", pipeline_label).as_str()).value())
+                .get(ComponentCacheKey::from(
+                    format!("{}_light_pipeline", pipeline_label).as_str(),
+                ))
                 .expect("Light pipeline not found");
+            let _ = world.query::<Instance>(|entity, instances| {
+                log_debug!("Rendering entity: {:?}", entity);
+                let cache_id = ComponentCacheKey::from(entity);
+                if let Some(model) = resources.model_manager.get(cache_id) {
+                    let instance_positions = Vector3::new(
+                        instances.position[0],
+                        instances.position[1],
+                        instances.position[2],
+                    );
 
-            render_pass.set_pipeline(&sky_pipeline);
-            if let (Some(camera_bind_group), Some(environment_bind_group), Some(light_bind_group)) = (
-                self.shared_bind_groups
-                    .get(INDEX_CAMERA_BIND_GROUP.try_into().unwrap()),
-                self.shared_bind_groups
-                    .get(INDEX_ENVIRONMENT_BIND_GROUP.try_into().unwrap()),
-                self.shared_bind_groups
-                    .get(INDEX_LIGHT_BIND_GROUP.try_into().unwrap()),
-            ) {
-                render_pass.draw_vertices(
-                    &[camera_bind_group, environment_bind_group],
-                    0..3,
-                    Some(0..1),
-                );
-
-                world.query::<Vec<Instance>>(|entity, instances| {
-                    let cache_id = CacheId::from(entity);
-                    if let Some(model) = resources.model_manager.get(cache_id.value()) {
-                        render_pass.set_pipeline(&light_pipeline);
-                        render_pass.draw_model(
-                            cache_id.into(),
-                            model,
-                            &[camera_bind_group, light_bind_group],
-                            None,
-                            &resources.buffer_manager,
-                            &resources.mesh_manager,
-                        );
-
-                        let model_bind_group_vec = prepare_model_bind_groups(
-                            &model.material_ids,
-                            &[camera_bind_group, light_bind_group],
-                            &resources.material_manager,
-                        );
-
-                        if let Ok(cube_instance_buffer) = resources
-                            .buffer_manager
-                            .get_instance_buffer(cache_id.value())
-                            .map_err(|_| wgpu::SurfaceError::Outdated)
-                        {
-                            render_pass.set_pipeline(&render_pipeline);
-                            render_pass.set_vertex_buffer(1, cube_instance_buffer.slice(..));
-                            render_pass.draw_model(
-                                cache_id.into(),
-                                model,
-                                &model_bind_group_vec,
-                                Some(0..instances.len() as u32),
-                                &resources.buffer_manager,
-                                &resources.mesh_manager,
-                            );
-                        }
+                    if frustum.contains_sphere(instance_positions, 1.0) {
+                        return;
                     }
-                });
-            }
-
-            if self.ctx.frame_time().frame_count % 3 == 0
+                    render_pass.set_pipeline(&light_pipeline);
+                    render_pass.draw_model(
+                        &model,
+                        &[&bind_groups.0, &bind_groups.1, &bind_groups.2],
+                        Some(0..1 as u32),
+                        &resources.buffer_manager,
+                        &resources.mesh_manager,
+                    );
+                }
+            });
+            if self.ctx.frame_metrics().frame_count % self.glyphon.interval == 0
                 && self.ctx.debug_mode() != DebugMode::None
             {
                 self.glyphon.render(
                     &mut render_pass,
-                    &gpu.device(),
-                    &gpu.queue(),
+                    &device,
+                    &queue,
                     &target.config,
-                    self.depth_stencil.depth_write_enabled,
+                    self.depth_buffer.stencil_state.depth_write_enabled,
                 );
             }
         }
@@ -196,48 +176,40 @@ impl Renderer3D {
 
         Ok(())
     }
+    pub fn resize(
+        &mut self,
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        size: PhysicalSize<u32>,
+    ) {
+        self.hdr.resize(device, size, config.format);
+        self.depth_buffer.resize(device, size);
+    }
 }
-
 pub struct RenderInfo {
-    frame: FrameTime,
-    debug: DebugMode,
+    frame_metrics: FrameMetrics,
+    debug_mode: DebugMode,
     primitive_topology: PrimitiveTopology,
-    draws_per_frame: u32,
-    vertices_per_frame: u32,
 }
 
 impl RenderInfo {
-    pub fn new(frame: FrameTime, debug: DebugMode, primitive_topology: PrimitiveTopology) -> Self {
+    pub fn new(
+        frame_metrics: FrameMetrics,
+        debug_mode: DebugMode,
+        primitive_topology: PrimitiveTopology,
+    ) -> Self {
         Self {
-            frame,
-            debug,
+            frame_metrics,
+            debug_mode,
             primitive_topology,
-            draws_per_frame: 0,
-            vertices_per_frame: 0,
         }
     }
-    pub fn reset_frame_stats(&mut self) {
-        self.draws_per_frame = 0;
-        self.vertices_per_frame = 0;
-    }
-
-    pub fn add_draw_call(&mut self, count: u32) {
-        self.draws_per_frame += count;
-    }
-
-    pub fn add_vertices(&mut self, count: u32) {
-        self.vertices_per_frame += count;
-    }
-
-    pub fn frame_stats(&self) -> (u32, u32) {
-        (self.draws_per_frame, self.vertices_per_frame)
-    }
-    pub fn update(&mut self) {
-        self.frame.compute();
+    pub fn compute(&mut self) {
+        self.frame_metrics.compute();
     }
     pub fn set_next_debug_mode(&mut self) {
-        self.debug = self.debug.next();
-        log_info!("Debug Mode: {:?}", self.debug);
+        self.debug_mode = self.debug_mode.next();
+        log_info!("Debug Mode: {:?}", self.debug_mode);
     }
 
     pub fn set_next_topology(&mut self) {
@@ -245,20 +217,20 @@ impl RenderInfo {
         log_info!("Render Mode: {:?}", self.primitive_topology);
     }
 
-    pub fn frame_time(&self) -> &FrameTime {
-        &self.frame
+    pub fn frame_metrics(&self) -> &FrameMetrics {
+        &self.frame_metrics
     }
 
-    pub fn set_frame_time(&mut self, frame: FrameTime) {
-        self.frame = frame;
+    pub fn set_frame_metrics(&mut self, frame_metrics: FrameMetrics) {
+        self.frame_metrics = frame_metrics;
     }
 
     pub fn debug_mode(&self) -> DebugMode {
-        self.debug
+        self.debug_mode
     }
 
-    pub fn set_debug_mode(&mut self, debug: DebugMode) {
-        self.debug = debug;
+    pub fn set_debug_mode(&mut self, debug_mode: DebugMode) {
+        self.debug_mode = debug_mode;
     }
 
     pub fn render_mode(&self) -> PrimitiveTopology {
@@ -271,9 +243,9 @@ impl RenderInfo {
 }
 #[derive(Debug)]
 pub struct BufferManager {
-    vertex_buffers: HashMap<u64, wgpu::Buffer>,
-    index_buffers: HashMap<u64, wgpu::Buffer>,
-    instance_buffers: HashMap<u64, wgpu::Buffer>,
+    vertex_buffers: HashMap<ComponentCacheKey, wgpu::Buffer>,
+    index_buffers: HashMap<ComponentCacheKey, wgpu::Buffer>,
+    instance_buffers: HashMap<ComponentCacheKey, wgpu::Buffer>,
 
     camera_buffer: Option<wgpu::Buffer>,
     light_buffer: Option<wgpu::Buffer>,
@@ -312,7 +284,7 @@ impl BufferManager {
         &mut self,
         device: &wgpu::Device,
         instances: &[Instance],
-        cache_id: u64,
+        cache_id: ComponentCacheKey,
     ) {
         let raw_instances: Vec<InstanceRaw> = instances.iter().map(|inst| inst.to_raw()).collect();
 
@@ -329,7 +301,7 @@ impl BufferManager {
         &self,
         queue: &wgpu::Queue,
         instances: &[Instance],
-        id: u64,
+        id: ComponentCacheKey,
     ) -> Result<(), AppError> {
         if let Some(buffer) = self.instance_buffers.get(&id) {
             let raw_instances: Vec<InstanceRaw> =
@@ -344,7 +316,7 @@ impl BufferManager {
         }
     }
 
-    pub fn get_instance_buffer(&self, id: u64) -> Result<&wgpu::Buffer, AppError> {
+    pub fn get_instance_buffer(&self, id: ComponentCacheKey) -> Result<&wgpu::Buffer, AppError> {
         self.instance_buffers.get(&id).ok_or_else(|| {
             AppError::BufferNotFoundError(format!("Instance buffer with ID {:?} not found", id))
         })
@@ -353,12 +325,12 @@ impl BufferManager {
         &mut self,
         device: &wgpu::Device,
         vertices: &[VertexType],
-        cache_id: u64,
+        cache_id: ComponentCacheKey,
     ) {
         let flat_data: Vec<u8> = vertices.iter().flat_map(|vertex| vertex.as_pod()).collect();
 
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("Vertex buffer: {:?}", cache_id)),
+            label: Some(&format!("vertex_buffer")),
             contents: &flat_data,
             usage: wgpu::BufferUsages::VERTEX,
         });
@@ -366,7 +338,12 @@ impl BufferManager {
         self.vertex_buffers.insert(cache_id, buffer);
     }
 
-    pub fn create_index_buffer(&mut self, device: &wgpu::Device, indices: &[u16], cache_id: u64) {
+    pub fn create_index_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        indices: &[u16],
+        cache_id: ComponentCacheKey,
+    ) {
         let buffer = Self::create_buffer(
             device,
             indices,
@@ -376,31 +353,35 @@ impl BufferManager {
         self.index_buffers.insert(cache_id, buffer);
     }
 
-    pub fn get_vertex_buffer(&self, id: u64) -> Result<&wgpu::Buffer, AppError> {
+    pub fn get_vertex_buffer(&self, id: ComponentCacheKey) -> Result<&wgpu::Buffer, AppError> {
         self.vertex_buffers.get(&id).ok_or_else(|| {
             AppError::BufferNotFoundError(format!("Vertex buffer with ID {:?} not found", id))
         })
     }
 
-    pub fn get_index_buffer(&self, id: u64) -> Result<&wgpu::Buffer, AppError> {
+    pub fn get_index_buffer(&self, id: ComponentCacheKey) -> Result<&wgpu::Buffer, AppError> {
         self.index_buffers.get(&id).ok_or_else(|| {
             AppError::BufferNotFoundError(format!("Index buffer with ID {:?} not found", id))
         })
     }
 
-    pub fn get_camera_buffer(&self) -> &Option<Buffer> {
-        &self.camera_buffer
+    pub fn get_camera_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.camera_buffer.as_ref()
     }
-
-    pub fn get_light_buffer(&self) -> &Option<Buffer> {
-        &self.light_buffer
+    pub fn contains_camera_buffer(&self) -> bool {
+        self.camera_buffer.is_some()
     }
     pub fn set_camera_buffer(&mut self, buffer: wgpu::Buffer) {
         self.camera_buffer = Some(buffer);
     }
-
+    pub fn get_light_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.light_buffer.as_ref()
+    }
+    pub fn contains_light_buffer(&self) -> bool {
+        self.light_buffer.is_some()
+    }
     pub fn set_light_buffer(&mut self, buffer: wgpu::Buffer) {
-        self.light_buffer = Some(buffer)
+        self.light_buffer = Some(buffer);
     }
     pub fn list_buffers(&self) -> Vec<String> {
         self.vertex_buffers
@@ -436,13 +417,8 @@ impl BufferFactory {
         });
         instance_buffer
     }
-    pub fn camera_buffer(
-        device: &wgpu::Device,
-        camera: &Camera,
-        projection: &Projection,
-    ) -> Buffer {
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera, &projection);
+    pub fn create_camera_uniform_buffer(device: &wgpu::Device) -> Buffer {
+        let camera_uniform = CameraUniform::new();
         Self::create_buffer(
             device,
             &[camera_uniform],
@@ -450,15 +426,10 @@ impl BufferFactory {
             "CameraUniformBuffer",
         )
     }
-    pub fn light_buffer(device: &wgpu::Device) -> Buffer {
+    pub fn create_light_buffer(device: &wgpu::Device) -> Buffer {
         Self::create_buffer(
             device,
-            &[LightUniform {
-                position: [2.0, 2.0, 2.0],
-                _padding: 0,
-                color: [1.0, 1.0, 1.0],
-                _padding2: 0,
-            }],
+            &[LightUniform::new([2.0, 2.0, 2.0], [1.0, 1.0, 1.0])],
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             "LightVertexBuffer",
         )
@@ -491,7 +462,6 @@ where
 {
     fn draw_model(
         &mut self,
-        cache_id: u64,
         model: &Model,
         bind_groups: &[&'b wgpu::BindGroup],
         instances: Option<Range<u32>>,
@@ -499,12 +469,13 @@ where
         mesh_manager: &MeshManager,
     ) {
         set_bind_groups(self, bind_groups);
+        let model_cache_key = model.into_cache_key();
 
         for mesh_id in &model.mesh_ids {
-            if let Some(mesh) = mesh_manager.get(mesh_id.value()) {
+            if let Some(mesh) = mesh_manager.get(*mesh_id) {
                 if let (Ok(vertex_buffer), Ok(index_buffer)) = (
-                    buffer_manager.get_vertex_buffer(cache_id),
-                    buffer_manager.get_index_buffer(cache_id),
+                    buffer_manager.get_vertex_buffer(model_cache_key),
+                    buffer_manager.get_index_buffer(model_cache_key),
                 ) {
                     self.set_vertex_buffer(0, vertex_buffer.slice(..));
                     self.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -531,24 +502,19 @@ where
 
     fn draw_mesh(
         &mut self,
-        cache_id: u64,
-        mesh: &'b Mesh,
-        bind_groups: &[&'b wgpu::BindGroup],
+        vertex_buffer: &wgpu::Buffer,
+        index_buffer: &wgpu::Buffer,
+        mesh: &Mesh,
+        bind_groups: &[&wgpu::BindGroup],
         instances: Option<Range<u32>>,
-        buffer_manager: BufferManager,
     ) {
-        if let (Ok(vertex_buffer), Ok(index_buffer)) = (
-            buffer_manager.get_vertex_buffer(cache_id),
-            buffer_manager.get_index_buffer(cache_id),
-        ) {
-            self.set_vertex_buffer(0, vertex_buffer.slice(..));
-            self.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            set_bind_groups(self, bind_groups);
-            if let Some(instances) = instances {
-                self.draw_indexed(0..mesh.num_elements, 0, instances);
-            } else {
-                self.draw_indexed(0..mesh.num_elements, 0, 0..1);
-            }
+        self.set_vertex_buffer(0, vertex_buffer.slice(..));
+        self.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        set_bind_groups(self, bind_groups);
+        if let Some(instances) = instances {
+            self.draw_indexed(0..mesh.num_elements, 0, instances);
+        } else {
+            self.draw_indexed(0..mesh.num_elements, 0, 0..1);
         }
     }
 

@@ -1,6 +1,8 @@
 use cgmath::{InnerSpace, Rad, Vector3};
 use winit::event::{ElementState, MouseScrollDelta, WindowEvent};
 
+use crate::log_info;
+
 use super::Camera;
 
 pub struct CameraController {
@@ -96,7 +98,7 @@ impl CameraController {
         }
     }
 
-    pub fn update_camera(&mut self, camera: &mut Camera, dt: f32) {
+    pub fn update(&mut self, camera: &mut Camera, dt: f32) {
         let forward = Vector3::new(
             self.yaw.to_radians().cos(),
             0.0,
@@ -117,5 +119,6 @@ impl CameraController {
 
         camera.yaw = Rad(self.yaw.to_radians());
         camera.pitch = Rad(self.pitch.to_radians());
+        log_info!("camera updated! {:?}", camera);
     }
 }

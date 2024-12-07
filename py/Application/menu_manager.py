@@ -33,7 +33,7 @@ class MenuThread(threading.Thread):
 
 
 class MenuManager:
-    def __init__(self, root: tk.Tk, signal_bus: SignalBus, scenes_directory: str = "./ru/static/scenes", env_file_path=".env"):
+    def __init__(self, root: tk.Tk, signal_bus: SignalBus, scenes_directory: str = "./ru/src/assets/scenes", env_file_path=".env"):
         self.root = root
         self.signal_bus = signal_bus
         self.scenes_directory = scenes_directory

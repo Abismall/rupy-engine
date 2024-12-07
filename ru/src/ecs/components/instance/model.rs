@@ -1,10 +1,30 @@
-use crate::ecs::traits::Vertex;
-#[derive(Debug, Clone, Copy)]
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+use crate::{
+    core::cache::ComponentCacheKey,
+    ecs::{components::IntoComponentCacheKey, traits::Vertex},
+};
+#[derive(Debug)]
 pub struct Instance {
     pub(crate) position: cgmath::Vector3<f32>,
     pub(crate) rotation: cgmath::Quaternion<f32>,
 }
+impl IntoComponentCacheKey for Instance {
+    fn into_cache_key(&self) -> ComponentCacheKey {
+        let mut hasher = DefaultHasher::new();
 
+        self.position.x.to_bits().hash(&mut hasher);
+        self.position.y.to_bits().hash(&mut hasher);
+        self.position.z.to_bits().hash(&mut hasher);
+
+        self.rotation.v.x.to_bits().hash(&mut hasher);
+        self.rotation.v.y.to_bits().hash(&mut hasher);
+        self.rotation.v.z.to_bits().hash(&mut hasher);
+        self.rotation.s.to_bits().hash(&mut hasher);
+
+        ComponentCacheKey(hasher.finish())
+    }
+}
 impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
         let model =

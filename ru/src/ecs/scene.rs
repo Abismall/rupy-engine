@@ -2,14 +2,16 @@ use crate::ecs::entity::Entity;
 
 #[derive(Debug)]
 pub struct Scene {
-    pub name: String,
+    name: String,
+    id: u64,
     entities: Vec<Entity>,
 }
 
 impl Scene {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, id: u64) -> Self {
         Self {
             name: name.to_string(),
+            id,
             entities: Vec::new(),
         }
     }

@@ -1,7 +1,4 @@
-use wgpu::{
-    CompositeAlphaMode, Device, PresentMode, Surface, SurfaceConfiguration, TextureFormat,
-    TextureUsages,
-};
+use wgpu::{Surface, SurfaceConfiguration};
 use winit::dpi::PhysicalSize;
 
 pub struct RenderSurface<'a> {
@@ -32,36 +29,17 @@ impl<'a> RenderSurface<'a> {
         Self { surface, config }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
         if new_size.width > 0 && new_size.height > 0 {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.surface.configure(&device, &self.config);
+            true
+        } else {
+            false
         }
     }
 
     pub fn get_current_texture(&self) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
         self.surface.get_current_texture()
-    }
-}
-pub fn surface_configuration(
-    format: TextureFormat,
-    width: u32,
-    height: u32,
-    present_mode: PresentMode,
-    alpha_mode: CompositeAlphaMode,
-    usage: TextureUsages,
-    view_formats: Vec<TextureFormat>,
-    desired_maximum_frame_latency: u32,
-) -> SurfaceConfiguration {
-    SurfaceConfiguration {
-        usage,
-        format,
-        width: width.max(1),
-        height: height.max(1),
-        present_mode,
-        alpha_mode,
-        view_formats,
-        desired_maximum_frame_latency,
     }
 }

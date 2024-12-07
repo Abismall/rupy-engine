@@ -47,15 +47,12 @@ async fn main() -> Result<(), AppError> {
     let event_bus_rx = rx.clone();
     let event_bus_proxy = event_proxy.clone();
     let event_bus = EventBusProxy::new(event_bus_rx, event_bus_proxy);
-    let bit_flags = BitFlags::empty();
     let mut rupy = Rupy {
         #[cfg(feature = "logging")]
         logger: LogFactory::default(),
         event_proxy,
         event_tx: arc_tx,
         task_tx,
-        bit_flags: bit_flags,
-        debug: rupy::app::DebugMode::None,
         state: None,
     };
 

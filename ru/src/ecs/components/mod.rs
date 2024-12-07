@@ -1,15 +1,19 @@
-use std::{collections::HashMap, sync::RwLock};
-
-use crate::core::error::AppError;
-
-use super::entity::{Component, Entity};
-
 pub mod instance;
 pub mod material;
 pub mod mesh;
 pub mod model;
 pub mod transform;
+pub mod utils;
+use super::entity::Entity;
+use crate::core::{cache::ComponentCacheKey, error::AppError};
+use std::{any::Any, collections::HashMap, sync::RwLock};
 
+pub trait IntoComponentCacheKey {
+    fn into_cache_key(&self) -> ComponentCacheKey;
+}
+pub trait Component: Any + Send + Sync {}
+
+impl<T> Component for T where T: Any + Send + Sync {}
 pub trait ComponentStorage {
     fn remove(&self, entity: Entity);
     fn as_any(&self) -> &dyn std::any::Any;

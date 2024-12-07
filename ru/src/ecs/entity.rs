@@ -1,14 +1,8 @@
-use std::any::Any;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Entity {
     pub id: u32,
     pub generation: u32,
 }
-
-pub trait Component: Any + Send + Sync {}
-
-impl<T: Any + Send + Sync> Component for T {}
 
 pub struct EntityManager {
     next_entity_id: u32,
@@ -51,5 +45,8 @@ impl EntityManager {
         self.generations
             .get(entity.id as usize)
             .map_or(false, |&gen| gen == entity.generation)
+    }
+    pub fn into_iter(self) -> std::vec::IntoIter<Entity> {
+        self.entities.into_iter()
     }
 }

@@ -7,11 +7,12 @@ use winit::{
 
 use crate::{
     events::{RupyAppEvent, WorkerTaskCompletion},
-    graphics::context::GpuContext,
+    graphics::context::GpuResourceCache,
+    input::process_input_events,
     log_error, log_info, log_warning,
 };
 
-use super::{app::Rupy, state::State};
+use super::{app::Rupy, flags::BitFlags, state::State};
 impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
@@ -45,16 +46,19 @@ impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        if self.bit_flags.is_shutting_down() || event == WindowEvent::CloseRequested {
-            self.shutdown(event_loop);
-        }
         let state = if let Some(value) = &mut self.state {
             value
         } else {
             log_warning!("Service not available!");
             return;
         };
-        state.input(&event);
+        if state.bit_flags.is_shutting_down() || event == WindowEvent::CloseRequested {
+            Rupy::shutdown(event_loop);
+        }
+        process_input_events(&event, || {
+            state.input(&event, state.renderer.ctx.frame_metrics().delta_time);
+        });
+
         match event {
             WindowEvent::Resized(size) => state.resize(size),
 
@@ -70,13 +74,13 @@ impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
                     }
 
                     PhysicalKey::Code(KeyCode::Escape) if is_pressed => {
-                        self.bit_flags.set_shutting_down()
+                        state.bit_flags.set_shutting_down()
                     }
 
                     PhysicalKey::Code(KeyCode::KeyP) if is_pressed => {
-                        match self.bit_flags.is_running() {
-                            true => self.bit_flags.set_paused(),
-                            false => self.bit_flags.set_running(),
+                        match state.bit_flags.is_running() {
+                            true => state.bit_flags.set_paused(),
+                            false => state.bit_flags.set_running(),
                         }
                     }
 
@@ -85,28 +89,10 @@ impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
             }
 
             WindowEvent::RedrawRequested => {
-                state.window.request_redraw();
-
-                if self.bit_flags.is_running() {
+                if state.bit_flags.is_running() {
+                    state.compute();
                     state.update();
-                    match state.renderer.render(
-                        &state.gpu,
-                        &state.target,
-                        &mut state.world,
-                        &mut state.resources,
-                    ) {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state
-                            .target
-                            .resize(&state.gpu.device(), state.window.inner_size()),
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            log_error!("OutOfMemory");
-                            self.shutdown(event_loop);
-                        }
-                        Err(wgpu::SurfaceError::Timeout) => {
-                            log_warning!("Surface timeout");
-                        }
-                    }
+                    state.render();
                 }
             }
 
@@ -118,8 +104,9 @@ impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
         match event {
             RupyAppEvent::CreateWindow => match self.create_window(event_loop) {
                 Ok(win) => {
-                    let gpu = block_on(GpuContext::new());
-                    match block_on(State::new(gpu, win)) {
+                    let gpu = block_on(GpuResourceCache::new());
+                    let bit_flags = BitFlags::empty();
+                    match block_on(State::new(gpu, bit_flags, win)) {
                         Ok(value) => {
                             self.state = Some(value);
                         }
@@ -128,8 +115,10 @@ impl<'a> winit::application::ApplicationHandler<RupyAppEvent> for Rupy<'a> {
                             return;
                         }
                     };
-                    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-                    self.bit_flags.set_running();
+                    if let Some(state) = &mut self.state {
+                        state.bit_flags.set_running();
+                        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+                    }
                 }
 
                 Err(e) => {

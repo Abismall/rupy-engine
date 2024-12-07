@@ -1,12 +1,12 @@
 
 from tkinter import ttk
 import tkinter as tk
-from Application.engine import launch_rupy_engine
 from Application.signal import SignalBus, Signals
 from Error.base import PyEngineError
 
 from Utils.constants import LAUNCHER_MENU
 from Utils.environment import EnvManager
+from Application.process_manager import RustProcessManager
 
 
 class LaunchOptionsMenu(tk.Frame):
@@ -17,6 +17,7 @@ class LaunchOptionsMenu(tk.Frame):
         self.signal_bus = signal_bus
         self.env_file_path = env_file_path
         self.env_vars = {}
+        self.rust_manager = None
         self.is_rust_window_open = False
         self.configure(background="#2b2b2b")
 
@@ -52,8 +53,8 @@ class LaunchOptionsMenu(tk.Frame):
         try:
             self.env_vars = EnvManager.get_dotenv_values(self.env_file_path)
         except Exception as e:
-            ttk.Label(self, text=f"Failed to load environment variables: {
-                e}", background="red").pack()
+            ttk.Label(
+                self, text=f"Failed to load environment variables: {e}", background="red").pack()
 
     def toggle_rust_window(self):
         if not self.is_rust_window_open:
@@ -65,14 +66,37 @@ class LaunchOptionsMenu(tk.Frame):
 
     def launch_rust_engine(self):
         try:
+            script_path = self.resolve_rust_script_path()
+            self.rust_manager = RustProcessManager(script_path)
+            self.rust_manager.start_rust_process()
             self.is_rust_window_open = True
-            launch_rupy_engine()
         except PyEngineError as e:
             print(f"Failed to launch engine: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
 
     def close_rust_engine(self):
-        if self.is_rust_window_open:
+        if self.rust_manager and self.is_rust_window_open:
+            self.rust_manager.stop_rust_process()
             self.is_rust_window_open = False
 
     def on_closing(self):
+        if self.is_rust_window_open:
+            self.close_rust_engine()
         self.signal_bus.publish(Signals.MENU_CLOSE, LAUNCHER_MENU)
+
+    def resolve_rust_script_path(self):
+        import platform
+        from pathlib import Path
+
+        file_name = "run.bat" if platform.system(
+        ).lower().startswith("windows") else "run.sh"
+        current_dir = Path(__file__).resolve().parent
+
+        for parent in current_dir.parents:
+            potential_ru_dir = parent / "ru"
+            if potential_ru_dir.is_dir():
+                script_path = potential_ru_dir / file_name
+                return str(script_path.resolve())
+
+        raise PyEngineError("RU_DIRECTORY_NOT_FOUND")

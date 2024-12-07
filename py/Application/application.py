@@ -9,7 +9,7 @@ from Application.menu_manager import MenuManager
 from Utils.constants import LAUNCH_OPTIONS_FLAG, LAUNCHER_MENU, FROZEN_EXEC, SCENE_MENU
 from Utils.environment import EnvManager
 from Error.base import PyEngineError
-from .engine import launch_rupy_engine
+
 from .signal import SignalBus, Signals
 
 
@@ -34,7 +34,6 @@ class App:
             root=self.tk_root, signal_bus=self.signal_bus, env_file_path=self.env_file)
 
         self.signal_bus.subscribe(Signals.ENV_RELOAD, self.load_environment)
-        self.signal_bus.subscribe(Signals.LAUNCH_ENGINE, self.launch_engine)
 
     def start(self, args: dict):
         self.init(args)
@@ -102,10 +101,6 @@ class App:
         self.logger.info(f"Total running threads: {len(threads)}")
         for thread in threads:
             self.logger.info(f"{thread.name} (Daemon: {thread.daemon})")
-
-    def launch_engine(self, channel: str, message: str):
-        launch_rupy_engine(
-        )
 
     def shutdown(self):
         self.publish_signal(Signals.APP_SHUTDOWN)

@@ -4,6 +4,7 @@ use cgmath::SquareMatrix;
 use crate::{
     camera::{projection::Projection, Camera},
     ecs::components::model::model::ModelVertex,
+    prelude::constant::Paddings,
 };
 
 #[repr(C)]
@@ -124,17 +125,24 @@ impl CameraUniform {
             inv_view: cgmath::Matrix4::identity().into(),
         }
     }
-    pub fn update_view_proj(&mut self, camera: &Camera, projection: &Projection) {
-        self.view_position = camera.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * camera.view_matrix()).into();
-    }
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
     pub position: [f32; 3],
-    pub _padding: u32,
+    pub _padding: f32,
     pub color: [f32; 3],
-    pub _padding2: u32,
+    pub _padding2: f32,
+}
+
+impl LightUniform {
+    pub fn new(position: [f32; 3], color: [f32; 3]) -> Self {
+        LightUniform {
+            position,
+            _padding: Paddings::PADDING,
+            color,
+            _padding2: Paddings::PADDING,
+        }
+    }
 }

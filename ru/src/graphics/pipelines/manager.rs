@@ -1,6 +1,9 @@
 use wgpu::RenderPipeline;
 
-use crate::{core::cache::HashCache, ecs::traits::Cache, prelude::helpers::string_to_u64};
+use crate::{
+    core::cache::{ComponentCacheKey, HashCache},
+    ecs::traits::Cache,
+};
 
 #[derive(Debug)]
 pub struct PipelineManager {
@@ -16,17 +19,17 @@ impl PipelineManager {
 }
 
 impl Cache<RenderPipeline> for PipelineManager {
-    fn get(&self, id: u64) -> Option<&RenderPipeline> {
+    fn get(&self, id: ComponentCacheKey) -> Option<&RenderPipeline> {
         self.cache.get(id)
     }
 
-    fn get_mut(&mut self, id: u64) -> Option<&mut RenderPipeline> {
+    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut RenderPipeline> {
         self.cache.get_mut(id)
     }
 
     fn get_or_create<F>(
         &mut self,
-        id: u64,
+        id: ComponentCacheKey,
         create_fn: F,
     ) -> Result<&mut RenderPipeline, crate::prelude::error::AppError>
     where
@@ -37,17 +40,17 @@ impl Cache<RenderPipeline> for PipelineManager {
 
     fn put(
         &mut self,
-        id: u64,
+        id: ComponentCacheKey,
         resource: RenderPipeline,
     ) -> Result<(), crate::prelude::error::AppError> {
         self.cache.put(id, resource)
     }
 
-    fn remove(&mut self, id: u64) {
+    fn remove(&mut self, id: ComponentCacheKey) {
         self.cache.remove(id);
     }
 
-    fn contains(&self, id: u64) -> bool {
+    fn contains(&self, id: ComponentCacheKey) -> bool {
         self.cache.contains(id)
     }
 }
