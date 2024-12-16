@@ -3,17 +3,42 @@ pub mod material;
 pub mod mesh;
 pub mod model;
 pub mod transform;
-pub mod utils;
-use super::entity::Entity;
-use crate::core::{cache::ComponentCacheKey, error::AppError};
+use instance::manager::InstanceManager;
+use material::manager::MaterialManager;
+use mesh::manager::MeshManager;
+use model::manager::ModelManager;
+
+use super::{entity::Entity, systems::render::BufferManager};
+use crate::{
+    core::error::AppError,
+    graphics::{
+        binding::BindGroupManager, pipelines::manager::PipelineManager,
+        shaders::manager::ShaderManager, textures::manager::TextureManager,
+    },
+};
 use std::{any::Any, collections::HashMap, sync::RwLock};
-
-pub trait IntoComponentCacheKey {
-    fn into_cache_key(&self) -> ComponentCacheKey;
+pub struct ResourceContext {
+    pub material_manager: MaterialManager,
+    pub texture_manager: TextureManager,
+    pub buffer_manager: BufferManager,
+    pub model_manager: ModelManager,
+    pub pipeline_manager: PipelineManager,
+    pub mesh_manager: MeshManager,
+    pub instance_manager: InstanceManager,
+    pub bind_group_manager: BindGroupManager,
+    pub shader_manager: ShaderManager,
 }
-pub trait Component: Any + Send + Sync {}
+pub trait VertexData {
+    fn vertices(&self) -> Vec<crate::graphics::vertex::VertexType>;
+}
 
-impl<T> Component for T where T: Any + Send + Sync {}
+pub trait IndexData {
+    fn indices(&self) -> Vec<u32>;
+}
+
+pub trait Component: Any + Send + Sync + Clone {}
+
+impl<T> Component for T where T: Any + Send + Sync + Clone {}
 pub trait ComponentStorage {
     fn remove(&self, entity: Entity);
     fn as_any(&self) -> &dyn std::any::Any;

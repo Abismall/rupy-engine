@@ -1,20 +1,8 @@
-pub mod controls;
+pub mod controller;
 pub mod frustum;
+pub mod handler;
 pub mod projection;
-
-use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
-use controls::CameraController;
-use projection::Projection;
-use winit::dpi::PhysicalSize;
-
-use crate::graphics::model::CameraUniform;
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.5,
-    0.0, 0.0, 0.0, 1.0,
-);
+use cgmath::{Angle, InnerSpace, Matrix4, Point3, Rad, Vector3};
 
 #[derive(Debug)]
 pub struct Camera {
@@ -35,59 +23,62 @@ impl Camera {
             pitch: pitch.into(),
         }
     }
-
-    pub fn view_matrix(&self) -> Matrix4<f32> {
-        let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
-        let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
-
-        Matrix4::look_to_rh(
-            self.position,
-            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
-            Vector3::unit_y(),
+    pub fn calculate_vectors(&self) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+        let forward = Vector3::new(
+            self.yaw.cos() * self.pitch.cos(),
+            self.pitch.sin(),
+            self.yaw.sin() * self.pitch.cos(),
         )
+        .normalize();
+        let right = forward.cross(Vector3::unit_y()).normalize();
+        let up = right.cross(forward).normalize();
+
+        (forward, right, up)
+    }
+    pub fn calc_view_matrix(&self) -> Matrix4<f32> {
+        let forward = Vector3::new(
+            self.yaw.cos() * self.pitch.cos(),
+            self.pitch.sin(),
+            self.yaw.sin() * self.pitch.cos(),
+        )
+        .normalize();
+
+        let target = self.position + forward;
+        let up = Vector3::unit_y();
+
+        Matrix4::look_at_rh(self.position, target, up)
     }
 }
-pub struct CameraHandler {
-    pub camera: Camera,
-    pub projection: Projection,
-    pub controller: CameraController,
-    pub uniform: CameraUniform,
-}
 
-impl CameraHandler {
-    pub fn new(
-        position: (f32, f32, f32),
-        yaw: cgmath::Deg<f32>,
-        pitch: cgmath::Deg<f32>,
-        size: PhysicalSize<u32>,
-    ) -> Self {
-        let camera = Camera::new(position, yaw, pitch);
-        let projection = Projection::new(size.width, size.height, cgmath::Deg(45.0), 0.1, 100.0);
-        let controller = CameraController::new(4.0, 0.8);
-        let uniform = CameraUniform::new();
-
-        CameraHandler {
-            camera,
-            projection,
-            controller,
-            uniform,
-        }
+impl Camera {
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("bg:layout:camera"),
+        })
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.projection.resize(size.width, size.height);
-    }
-    pub fn update_view_projection(&mut self) {
-        self.uniform.view_proj = (self.projection.calc_matrix() * self.camera.view_matrix()).into();
-    }
-    pub fn update_view_position(&mut self) {
-        self.uniform.view_position = self.camera.position.to_homogeneous().into();
-    }
-    pub fn update_movement(&mut self, delta_time: f32) {
-        self.controller.update(&mut self.camera, delta_time);
-    }
-    pub fn update(&mut self) {
-        self.update_view_position();
-        self.update_view_projection();
+    pub fn create_bind_group(
+        device: &wgpu::Device,
+        camera_buffer: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        let layout = Self::create_bind_group_layout(device);
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+            label: Some("bg:camera"),
+        })
     }
 }

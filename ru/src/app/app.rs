@@ -1,8 +1,11 @@
 use crate::{
-    core::{error::AppError, worker::WorkerTask},
-    events::{proxy::EventProxyTrait, RupyAppEvent},
+    core::{
+        error::AppError,
+        events::{proxy::EventProxyTrait, RupyAppEvent},
+        worker::WorkerTask,
+    },
     graphics::global::initialize_instance,
-    log_error, log_info,
+    log_error,
     prelude::helpers::read_window_attributes_from_env,
 };
 use std::sync::Arc;
@@ -15,57 +18,36 @@ use winit::{event_loop::ActiveEventLoop, window::WindowAttributes};
 #[cfg(feature = "logging")]
 use crate::rupyLogger;
 
-pub struct Rupy<'a> {
+pub struct Rupy {
     pub event_proxy: Arc<dyn EventProxyTrait<RupyAppEvent> + Send + Sync>,
     pub event_tx: Arc<Sender<RupyAppEvent>>,
     pub task_tx: Sender<WorkerTask>,
     #[cfg(feature = "logging")]
     pub logger: rupyLogger::factory::LogFactory,
 
-    pub state: Option<State<'a>>,
+    pub state: Option<State>,
 }
 
-impl<'a> Rupy<'a> {
-    pub fn send_event(&self, event: RupyAppEvent) -> std::result::Result<(), AppError> {
-        self.event_tx.send(event).map_err(AppError::EventSendError)
-    }
-    pub fn send_task(&self, task: WorkerTask) -> Result<(), AppError> {
-        self.task_tx
-            .send(task)
-            .map_err(AppError::TaskQueueSendError)
-    }
-}
-
-impl<'a> Rupy<'a> {
-    pub fn shutdown(event_loop: &ActiveEventLoop) {
-        if event_loop.exiting() {
-            return;
-        } else {
-            log_info!("Exit");
-            event_loop.exit();
-        };
-    }
-    pub fn update(&self, state: Option<&mut State>) {
-        if let Some(state) = state {
-            if !state.bit_flags.is_running() {
-                return;
-            } else {
-                state.renderer.ctx.compute();
-            }
+impl Rupy {
+    pub fn send_event(&self, event: RupyAppEvent) {
+        let event_name = event.name().to_string();
+        if let Err(e) = self.event_tx.send(event) {
+            log_error!("Rupy::send_event: {:?} {:?}", event_name, e);
         }
     }
+    pub fn send_task(&self, task: WorkerTask) -> std::result::Result<(), AppError> {
+        Ok(self.task_tx.send(task)?)
+    }
+}
 
+impl Rupy {
     pub async fn initialize(&mut self) -> Result<(), AppError> {
         if let Err(e) = initialize_instance().await {
             log_error!("Failed to setup gpu resources: {:?}", e);
             return Err(e.into());
         }
 
-        if let Err(e) = self.send_event(RupyAppEvent::CreateWindow) {
-            log_error!("Failed to send initialized event: {:?}", e);
-            return Err(e);
-        }
-
+        self.send_event(RupyAppEvent::CreateWindow);
         Ok(())
     }
     pub fn create_window(
@@ -93,5 +75,20 @@ impl<'a> Rupy<'a> {
             return Err(e);
         };
         Ok(())
+    }
+    pub async fn initialize_state(
+        &mut self,
+        window: std::sync::Arc<winit::window::Window>,
+    ) -> bool {
+        let gpu = pollster::block_on(crate::graphics::context::GpuResourceCache::new());
+        let bit_flags = super::flags::BitFlags::empty();
+        self.state = match State::new(gpu, bit_flags, window).await {
+            Ok(state) => Some(state),
+            Err(e) => {
+                log_error!("{:?}", e);
+                None
+            }
+        };
+        self.state.is_some()
     }
 }

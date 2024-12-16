@@ -2,17 +2,14 @@ pub mod app;
 pub mod camera;
 pub mod core;
 pub mod ecs;
-pub mod events;
 pub mod graphics;
-pub mod input;
-pub mod logging;
 pub mod math;
 pub mod ui;
 
 pub mod utilities;
 
 #[cfg(feature = "logging")]
-pub use logging as rupyLogger;
+pub use core::logging as rupyLogger;
 
 #[cfg(feature = "logging")]
 #[macro_export]
@@ -68,8 +65,6 @@ pub mod prelude {
     pub use crate::app::*;
     pub use crate::camera::*;
     pub use crate::core::*;
-    pub use crate::events::*;
-    pub use crate::input::*;
     pub use crate::math::*;
     pub use crate::utilities::*;
 }

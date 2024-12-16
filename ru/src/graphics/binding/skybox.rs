@@ -1,11 +1,11 @@
 use wgpu::Device;
 
-use crate::graphics::textures::{BindableTexture, Texture};
+use crate::graphics::textures::{cube_texture::CubeTexture, BindableTexture, Texture};
 
-pub fn create_environment_bind_group(device: &Device, sky_texture: &Texture) -> wgpu::BindGroup {
-    let bind_group_layout = create_environment_bind_group_layout(device);
+pub fn create_skybox_bind_group(device: &Device, sky_texture: &CubeTexture) -> wgpu::BindGroup {
+    let bind_group_layout = create_skybox_bind_group_layout(device);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("environment_bind_group"),
+        label: Some("skybox_bind_group"),
         layout: &bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
@@ -21,9 +21,9 @@ pub fn create_environment_bind_group(device: &Device, sky_texture: &Texture) -> 
     bind_group
 }
 
-pub fn create_environment_bind_group_layout(device: &Device) -> wgpu::BindGroupLayout {
+pub fn create_skybox_bind_group_layout(device: &Device) -> wgpu::BindGroupLayout {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("environment_layout"),
+        label: Some("skybox_layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,

@@ -1,16 +1,15 @@
+use super::model::Mesh;
 use crate::{
     core::{
-        cache::{ComponentCacheKey, HashCache},
+        cache::{CacheKey, HasCacheKey, HashCache},
         error::AppError,
     },
-    ecs::{components::IntoComponentCacheKey, systems::render::BufferManager, traits::Cache},
-    graphics::model::VertexType,
+    ecs::systems::render::BufferManager,
+    graphics::vertex::VertexType,
 };
 
-use super::model::Mesh;
-
 pub struct MeshManager {
-    meshes: HashCache<Mesh>,
+    pub meshes: HashCache<Mesh>,
 }
 
 impl MeshManager {
@@ -25,51 +24,36 @@ impl MeshManager {
         device: &wgpu::Device,
         buffer_manager: &mut BufferManager,
         vertices: Vec<VertexType>,
-        indices: Vec<u16>,
-        material: usize,
-    ) -> Result<ComponentCacheKey, AppError> {
-        let mesh = Mesh {
-            num_elements: indices.len() as u32,
+        indices: Vec<u32>,
+        material: Option<usize>,
+        name: String,
+    ) -> Result<CacheKey, AppError> {
+        create_cached_mesh_with_buffers(
+            device,
+            &mut self.meshes,
+            &mut buffer_manager.buffers,
+            vertices,
+            indices,
             material,
-        };
-        let mesh_cache_id = mesh.into_cache_key();
-        buffer_manager.create_vertex_buffer(device, &vertices, mesh_cache_id);
-        buffer_manager.create_index_buffer(device, &indices, mesh_cache_id);
-        self.put(mesh_cache_id, mesh)?;
-
-        Ok(mesh_cache_id)
+            name,
+        )
     }
 }
 
-impl Cache<Mesh> for MeshManager {
-    fn get(&self, id: ComponentCacheKey) -> Option<&Mesh> {
-        self.meshes.get(id)
-    }
+pub fn create_cached_mesh_with_buffers(
+    device: &wgpu::Device,
+    meshes: &mut HashCache<Mesh>,
+    buffers: &mut HashCache<wgpu::Buffer>,
+    vertices: Vec<VertexType>,
+    indices: Vec<u32>,
+    material: Option<usize>,
+    name: String,
+) -> Result<CacheKey, AppError> {
+    let cache_key = Mesh::key(vec![&name, &material.unwrap_or(0).to_string()]);
+    let mesh = Mesh::cache(Mesh::new(cache_key, material, vertices, indices), meshes);
 
-    fn contains(&self, id: ComponentCacheKey) -> bool {
-        self.meshes.contains(id)
-    }
+    Mesh::cache_index_buffer(&mesh, device, buffers);
+    Mesh::cache_vertex_buffer(&mesh, device, buffers);
 
-    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut Mesh> {
-        self.meshes.get_mut(id)
-    }
-
-    fn get_or_create<F>(
-        &mut self,
-        id: ComponentCacheKey,
-        create_fn: F,
-    ) -> Result<&mut Mesh, AppError>
-    where
-        F: FnOnce() -> Result<Mesh, AppError>,
-    {
-        self.meshes.get_or_create(id, create_fn)
-    }
-
-    fn put(&mut self, id: ComponentCacheKey, resource: Mesh) -> Result<(), AppError> {
-        self.meshes.put(id, resource)
-    }
-
-    fn remove(&mut self, id: ComponentCacheKey) {
-        self.meshes.remove(id);
-    }
+    Ok(cache_key)
 }

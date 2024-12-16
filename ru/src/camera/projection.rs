@@ -1,28 +1,28 @@
-use cgmath::{perspective, Matrix4, Rad, SquareMatrix};
+use cgmath::{Matrix4, Rad};
 
 #[derive(Debug)]
 pub struct Projection {
-    aspect: f32,
-    fovy: Rad<f32>,
-    znear: f32,
-    zfar: f32,
+    pub aspect: f64,
+    pub fovy: Rad<f32>,
+    pub znear: f32,
+    pub zfar: f32,
 }
 
 impl Projection {
-    pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F, znear: f32, zfar: f32) -> Self {
+    pub fn new<F: Into<Rad<f32>>>(aspect_ratio: f64, fovy: F, znear: f32, zfar: f32) -> Self {
         Self {
-            aspect: width as f32 / height as f32,
+            aspect: aspect_ratio,
             fovy: fovy.into(),
             znear,
             zfar,
         }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.aspect = width as f32 / height as f32;
+    pub fn set_aspect_ratio<P: Into<f64>>(&mut self, width: P, height: P) {
+        self.aspect = width.into() / height.into();
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {
-        Matrix4::identity() * perspective(self.fovy, self.aspect, self.znear, self.zfar)
+        cgmath::perspective(self.fovy, self.aspect as f32, self.znear, self.zfar)
     }
 }

@@ -6,7 +6,7 @@ use glyphon::{Resolution, TextBounds};
 use wgpu::{Device, Queue, RenderPass, SurfaceConfiguration};
 
 use crate::app::DebugMode;
-use crate::prelude::frame::FrameMetrics;
+use crate::prelude::metrics::FrameMetrics;
 
 pub struct GlyphonRender {
     font_system: FontSystem,
@@ -16,14 +16,12 @@ pub struct GlyphonRender {
     swash_cache: SwashCache,
     viewport: Viewport,
     glyphon_buffer: glyphon::Buffer,
-    pub interval: u32,
 }
 
 impl GlyphonRender {
     pub fn new(
         device: &Device,
         queue: &Queue,
-        interval: u32,
         swapchain_format: wgpu::TextureFormat,
         depth_stencil: &wgpu::DepthStencilState,
     ) -> Self {
@@ -50,7 +48,7 @@ impl GlyphonRender {
 
         GlyphonRender {
             font_system,
-            interval,
+
             atlas,
             renderer_2d,
             renderer_3d,
@@ -112,7 +110,7 @@ impl GlyphonRender {
                             right: surface_config.width as i32,
                             bottom: surface_config.height as i32,
                         },
-                        default_color: glyphon::Color::rgb(255, 255, 255),
+                        default_color: glyphon::Color::rgb(1, 1, 1),
                         custom_glyphs: &[],
                     }],
                     &mut self.swash_cache,
@@ -141,7 +139,7 @@ impl GlyphonRender {
                             right: surface_config.width as i32,
                             bottom: surface_config.height as i32,
                         },
-                        default_color: glyphon::Color::rgb(255, 255, 255),
+                        default_color: glyphon::Color::rgb(1, 1, 1),
                         custom_glyphs: &[],
                     }],
                     &mut self.swash_cache,
@@ -205,17 +203,32 @@ impl GlyphonRender {
         match debug_mode {
             DebugMode::None => {}
             DebugMode::Minimal => {
-                self.fps([25.0, 10.0], frame_metrics.fps);
+                self.fps([20.0, 10.0], frame_metrics.fps);
+                self.culling_rate([20.0, 20.0], frame_metrics);
             }
             DebugMode::Verbose => {
-                self.fps([25.0, 10.0], frame_metrics.fps);
-                self.frame_metrics([25.0, 30.0], frame_metrics);
+                self.fps([20.0, 10.0], frame_metrics.fps);
+                self.culling_rate([20.0, 20.0], frame_metrics);
+                self.frame_metrics([20.0, 30.0], frame_metrics);
             }
         }
         self.glyphon_buffer
             .shape_until_scroll(&mut self.font_system, false);
     }
-
+    pub fn culling_rate(&mut self, position: [f32; 2], frame_metrics: &FrameMetrics) {
+        self.push_buffer_lines(
+            &format!(
+                "Culled: {:.2}%, Visible: {:.2}%",
+                frame_metrics.culled_percentage(),
+                frame_metrics.visible_percentage()
+            ),
+            [position[0], position[1]],
+            None,
+            Some(LineEnding::Lf),
+            None,
+            None,
+        );
+    }
     pub fn fps(&mut self, position: [f32; 2], fps: f32) {
         self.push_buffer_lines(
             &format!("FPS: {}", fps),

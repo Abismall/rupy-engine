@@ -1,6 +1,6 @@
 use super::global::{get_adapter, get_device, get_instance, get_queue};
 use bytemuck::Pod;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use wgpu::{Adapter, Buffer, BufferAddress, CommandBuffer, Device, Queue};
 
 pub struct GpuResourceCache {
@@ -34,20 +34,20 @@ impl GpuResourceCache {
         (adapter, device, queue, instance)
     }
 
-    pub fn device(&self) -> &Arc<Device> {
-        &self.device
+    pub fn device(&self) -> Arc<Device> {
+        self.device.clone()
     }
 
-    pub fn adapter(&self) -> &Arc<Adapter> {
-        &self.adapter
+    pub fn adapter(&self) -> Arc<Adapter> {
+        self.adapter.clone()
     }
 
-    pub fn queue(&self) -> &Arc<Queue> {
-        &self.queue
+    pub fn queue(&self) -> Arc<Queue> {
+        self.queue.clone()
     }
 
-    pub fn instance(&self) -> &Arc<wgpu::Instance> {
-        &self.instance
+    pub fn instance(&self) -> Arc<wgpu::Instance> {
+        self.instance.clone()
     }
 
     pub fn submit(&self, command_buffer: CommandBuffer) {
@@ -61,7 +61,12 @@ impl GpuResourceCache {
         self.queue.submit(command_buffers);
     }
 
-    pub fn write_to_buffer<T: Pod>(&self, buffer: &Buffer, offset: BufferAddress, data: &[T]) {
+    pub fn write_to_buffer<T: Pod + Debug>(
+        &self,
+        buffer: &Buffer,
+        offset: BufferAddress,
+        data: &[T],
+    ) {
         self.queue
             .write_buffer(buffer, offset, bytemuck::cast_slice(data));
     }

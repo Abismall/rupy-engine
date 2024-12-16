@@ -1,9 +1,7 @@
-pub mod trigonometry;
 pub use nalgebra::*;
 pub const PI: f64 = std::f64::consts::PI;
 pub const FRAC_2_PI: f64 = std::f64::consts::FRAC_2_PI;
 pub const FRAC_PI_4: f64 = std::f64::consts::FRAC_PI_4;
-pub use trigonometry::{cos, degrees, radians, sin};
 
 pub fn clamp(value: f32, min: f32, max: f32) -> f32 {
     if value < min {

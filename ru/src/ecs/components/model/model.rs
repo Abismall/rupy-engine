@@ -1,102 +1,51 @@
-use std::io::{BufReader, Cursor};
-
 use crate::{
-    core::{cache::ComponentCacheKey, error::AppError, files::FileSystem},
+    core::{
+        cache::{CacheKey, HasCacheKey},
+        error::AppError,
+        files::FileSystem,
+    },
     ecs::{
         components::{
-            material::model::Material, mesh::model::Mesh, utils::load_texture,
-            IntoComponentCacheKey,
+            material::model::create_material,
+            mesh::{manager::create_cached_mesh_with_buffers, model::Mesh},
+            ResourceContext,
         },
-        systems::render::BufferManager,
-        traits::{Cache, Vertex},
+        traits::Cache,
     },
-    graphics::{binding::BindGroupManager, model::VertexType, textures::manager::TextureManager},
-    log_info,
-    prelude::helpers::string_to_u64,
+    log_error,
 };
+use std::io::{BufReader, Cursor};
 
 #[derive(Debug, Clone)]
 pub struct Model {
-    pub mesh_ids: Vec<ComponentCacheKey>,
-    pub material_ids: Vec<ComponentCacheKey>,
+    pub mesh_ids: Vec<CacheKey>,
+    pub material_ids: Vec<CacheKey>,
 }
-impl IntoComponentCacheKey for Model {
-    fn into_cache_key(&self) -> ComponentCacheKey {
-        ComponentCacheKey::from(
-            self.mesh_ids
-                .iter()
-                .fold(0u64, |acc, &key| acc ^ key.value())
-                ^ self
-                    .material_ids
-                    .iter()
-                    .fold(0u64, |acc, &key| acc ^ key.value()),
-        )
+impl Model {
+    pub const LABEL: &'static str = "component:model";
+}
+impl HasCacheKey for Model {
+    fn key(suffixes: Vec<&str>) -> CacheKey {
+        let mut base = String::from(Self::LABEL);
+        for suffix in suffixes {
+            base.push_str(format!(":{}", suffix).as_ref());
+        }
+        CacheKey::from(&base)
     }
 }
+
 #[derive(Debug)]
 pub struct ModelRaw {
-    pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
+    pub models: Vec<tobj::Model>,
+    pub materials: Vec<tobj::Material>,
 }
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ModelVertex {
-    pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
-    pub normal: [f32; 3],
-    pub tangent: [f32; 3],
-    pub bitangent: [f32; 3],
+impl ModelRaw {
+    pub const LABEL: &'static str = "component:model_raw";
 }
-impl Vertex for ModelVertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
-}
-pub async fn load_model(
-    file_name: &str,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-    buffer_manager: &mut BufferManager,
-    texture_manager: &mut TextureManager,
-    bind_group_manager: &mut BindGroupManager,
-) -> Result<Model, AppError> {
-    log_info!("Loading model from file: {:?}", file_name);
-    let bind_group_key = ComponentCacheKey::from(file_name);
-    let obj_text = FileSystem::load_string(file_name)?;
-    let obj_cursor = Cursor::new(obj_text);
-    let mut obj_reader = BufReader::new(obj_cursor);
+
+pub async fn load_model_raw(file_name: &str) -> Result<ModelRaw, AppError> {
+    let obj_text = load_obj_file_string(file_name).await?;
+    let mut obj_reader = read_object(obj_text).await?;
 
     let (models, obj_materials) = tobj::load_obj_buf_async(
         &mut obj_reader,
@@ -112,73 +61,110 @@ pub async fn load_model(
     )
     .await?;
 
+    Ok(ModelRaw {
+        models,
+        materials: obj_materials?,
+    })
+}
+
+pub async fn load_obj_file_string(file_name: &str) -> Result<String, AppError> {
+    let result = FileSystem::load_string(file_name);
+    match result {
+        Ok(text) => Ok(text),
+        Err(e) => Err(e),
+    }
+}
+
+pub async fn read_object(obj_text: String) -> Result<BufReader<Cursor<String>>, AppError> {
+    let obj_cursor = Cursor::new(obj_text);
+    let obj_reader = BufReader::new(obj_cursor);
+    return Ok(obj_reader);
+}
+
+async fn build_material_ids(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    obj_materials: Vec<tobj::Material>,
+    resources: &mut ResourceContext,
+) -> Result<Vec<CacheKey>, AppError> {
     let mut material_ids = Vec::new();
-    for m in obj_materials? {
-        let diffuse_texture_key = ComponentCacheKey::from(string_to_u64(&m.diffuse_texture));
-        if !texture_manager.contains(diffuse_texture_key) {
-            let diffuse_texture = load_texture(&m.diffuse_texture, false, device, queue).await?;
-            texture_manager
-                .put(diffuse_texture_key, diffuse_texture.into())
-                .ok();
-        }
 
-        let normal_texture_key = ComponentCacheKey::from(string_to_u64(&m.normal_texture));
-        if !texture_manager.contains(normal_texture_key) {
-            let normal_texture = load_texture(&m.normal_texture, true, device, queue).await?;
-            texture_manager
-                .put(diffuse_texture_key, normal_texture.into())
-                .ok();
-        }
+    let texture_manager = &mut resources.texture_manager;
+    let bind_group_manager = &mut resources.bind_group_manager;
 
-        let material = Material::new(
+    for obj_material in obj_materials {
+        let material = create_material(
             device,
-            file_name,
-            layout,
+            queue,
+            obj_material,
             texture_manager,
             bind_group_manager,
-            Some(diffuse_texture_key),
-            Some(normal_texture_key),
-        )?;
-        let material_cache_id = material.into_cache_key();
-        material_ids.push(material_cache_id);
+        )
+        .await?;
+        let id: CacheKey = material.cache_key.clone();
+        resources
+            .material_manager
+            .materials
+            .put(material.cache_key.clone(), material);
+
+        material_ids.push(id);
     }
 
+    Ok(material_ids)
+}
+
+fn build_mesh_ids(
+    device: &wgpu::Device,
+    resources: &mut ResourceContext,
+    chunk_size: usize,
+    models: Vec<tobj::Model>,
+) -> Result<Vec<CacheKey>, AppError> {
     let mut mesh_ids = Vec::new();
-    for model in models {
-        let vertices = (0..model.mesh.positions.len() / 3)
-            .map(|i| {
-                VertexType::Modeled(ModelVertex {
-                    position: [
-                        model.mesh.positions[i * 3],
-                        model.mesh.positions[i * 3 + 1],
-                        model.mesh.positions[i * 3 + 2],
-                    ],
-                    tex_coords: [
-                        model.mesh.texcoords[i * 2],
-                        1.0 - model.mesh.texcoords[i * 2 + 1],
-                    ],
-                    normal: [
-                        model.mesh.normals[i * 3],
-                        model.mesh.normals[i * 3 + 1],
-                        model.mesh.normals[i * 3 + 2],
-                    ],
-                    tangent: [0.0; 3],
-                    bitangent: [0.0; 3],
-                })
-            })
-            .collect::<Vec<_>>();
-        let num_elements = model.mesh.indices.len() as u32;
 
-        let mesh = Mesh {
-            num_elements,
-            material: model.mesh.material_id.unwrap_or(0),
-        };
-        let mesh_cache_id = mesh.into_cache_key();
-        mesh_ids.push(mesh_cache_id);
+    for model in models {
+        let mut vertices = Mesh::generate_vertices(
+            &model.mesh.positions,
+            &model.mesh.texcoords,
+            &model.mesh.normals,
+            chunk_size,
+        );
+        Mesh::generate_tangent_space(&mut vertices, &model.mesh.indices, chunk_size);
+
+        match create_cached_mesh_with_buffers(
+            device,
+            &mut resources.mesh_manager.meshes,
+            &mut resources.buffer_manager.buffers,
+            vertices,
+            model.mesh.indices,
+            model.mesh.material_id,
+            model.name,
+        ) {
+            Ok(cache_id) => mesh_ids.push(cache_id),
+            Err(e) => {
+                log_error!("model:build_mesh_ids: {:?}", e);
+            }
+        }
     }
 
-    Ok(Model {
+    Ok(mesh_ids)
+}
+
+pub fn assemble_model(mesh_ids: Vec<CacheKey>, material_ids: Vec<CacheKey>) -> Model {
+    Model {
         mesh_ids,
         material_ids,
-    })
+    }
+}
+
+pub async fn load_model(
+    file_name: &str,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    resources: &mut ResourceContext,
+) -> Result<Model, AppError> {
+    let chunk_size: usize = 3;
+    let raw_model = load_model_raw(file_name).await?;
+    let material_ids = build_material_ids(device, queue, raw_model.materials, resources).await?;
+    let mesh_ids = build_mesh_ids(device, resources, chunk_size, raw_model.models)?;
+    Ok(assemble_model(mesh_ids, material_ids))
 }

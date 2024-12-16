@@ -1,13 +1,9 @@
-use crate::{
-    events::{RupyAppEvent, WorkerTaskCompletion},
-    graphics::shaders::loader::list_shader_file_paths,
-    log_warning,
-};
+use super::events::RupyAppEvent;
 use crossbeam::channel::{Receiver, Sender};
 
 #[derive(Debug)]
 pub enum WorkerTask {
-    LoadShaderFiles,
+    Load,
 }
 
 pub struct RupyWorker {
@@ -17,23 +13,6 @@ pub struct RupyWorker {
 impl RupyWorker {
     pub fn spawn(task_receiver: Receiver<WorkerTask>, result_sender: Sender<RupyAppEvent>) {
         let result_tx = result_sender.clone();
-        tokio::spawn(async move {
-            while let Ok(task) = task_receiver.recv() {
-                match task {
-                    WorkerTask::LoadShaderFiles => match list_shader_file_paths() {
-                        Ok(data) => {
-                            if let Err(e) = result_tx.send(RupyAppEvent::TaskCompleted(
-                                WorkerTaskCompletion::LoadShaderFiles(data),
-                            )) {
-                                log_warning!("{:?}", e);
-                            }
-                        }
-                        Err(e) => {
-                            log_warning!("{:?}", e);
-                        }
-                    },
-                }
-            }
-        });
+        tokio::spawn(async move { while let Ok(task) = task_receiver.recv() {} });
     }
 }

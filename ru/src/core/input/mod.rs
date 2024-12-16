@@ -2,20 +2,17 @@ pub use winit::event;
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 pub mod action;
 
-pub fn process_input_events<F>(event: &WindowEvent, process_fn: F)
+pub fn process_input_events<F>(event: &WindowEvent, cb: F)
 where
-    F: FnOnce(),
+    F: FnOnce() -> (),
 {
     match event {
         WindowEvent::CursorMoved { .. }
         | WindowEvent::KeyboardInput { .. }
-        | WindowEvent::MouseWheel {
-            delta: MouseScrollDelta::PixelDelta(_) | MouseScrollDelta::LineDelta(_, _),
-            ..
-        } => {
-            process_fn();
+        | WindowEvent::MouseWheel { .. } => {
+            cb();
         }
-        _ => {}
+        _ => return,
     }
 }
 

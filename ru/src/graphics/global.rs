@@ -17,110 +17,125 @@ pub struct GpuQueue {
 }
 
 fn new_instance() -> wgpu::Instance {
-    let instance = Instance::new(InstanceDescriptor::default());
-    instance
+    Instance::new(InstanceDescriptor::default())
 }
 
 async fn request_adapter(instance: &wgpu::Instance) -> Result<wgpu::Adapter, AppError> {
-    let power_preference = wgpu::PowerPreference::HighPerformance;
-    let compatible_surface = None;
-    let force_fallback_adapter = false;
     let options = wgpu::RequestAdapterOptions {
-        power_preference,
-        compatible_surface,
-        force_fallback_adapter,
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        force_fallback_adapter: false,
     };
-    match instance.request_adapter(&options).await {
-        Some(adapter) => Ok(adapter),
-        None => Err(AppError::AdapterRequestError),
-    }
+    instance
+        .request_adapter(&options)
+        .await
+        .ok_or(AppError::GPUResourceError(String::from(
+            "GPU adapter is not available",
+        )))
 }
+
 async fn request_device(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), AppError> {
     let adapter_features = adapter.features();
     let desired_features = Features::all_webgpu_mask();
     let supported_features = adapter_features & desired_features;
-    let required_limits = wgpu::Limits::downlevel_defaults();
-    let memory_hints = wgpu::MemoryHints::Performance;
     let desc = wgpu::DeviceDescriptor {
         label: Some("Device"),
         required_features: supported_features,
-        required_limits,
-        memory_hints,
+        required_limits: wgpu::Limits::downlevel_defaults(),
+        memory_hints: wgpu::MemoryHints::Performance,
     };
-    let (device, queue) = adapter
+    adapter
         .request_device(&desc, None)
         .await
-        .map_err(|e| AppError::RequestDeviceError(e))?;
-    Ok((device, queue))
+        .map_err(AppError::RequestDeviceError)
 }
-pub static CACHED_DEVICE: Lazy<RwLock<Option<Arc<GPU>>>> = Lazy::new(|| RwLock::new(None));
 
-pub static CACHED_QUEUE: Lazy<RwLock<Option<Arc<GpuQueue>>>> = Lazy::new(|| RwLock::new(None));
+pub static GPU_INSTANCE: Lazy<Arc<RwLock<Option<GPU>>>> = Lazy::new(|| Arc::new(RwLock::new(None)));
+
+pub static GPU_QUEUE: Lazy<Arc<RwLock<Option<GpuQueue>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(None)));
 
 pub async fn initialize_instance() -> Result<(), AppError> {
+    {
+        let gpu_instance = GPU_INSTANCE
+            .read()
+            .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
+        if gpu_instance.is_some() {
+            return Ok(());
+        }
+    }
+
     let instance = new_instance();
-    let adapter = request_adapter(&instance)
-        .await
-        .expect("Failed to set adapter to global cache");
-
+    let adapter = request_adapter(&instance).await?;
     let (device, queue) = request_device(&adapter).await?;
-    let mut device_cache = CACHED_DEVICE
-        .write()
-        .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    *device_cache = Some(Arc::new(GPU {
-        device: Arc::new(device),
-        adapter: Arc::new(adapter),
-        instance: Arc::new(instance),
-    }));
 
-    let mut queue_cache = CACHED_QUEUE
-        .write()
-        .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    *queue_cache = Some(Arc::new(GpuQueue {
-        queue: Arc::new(queue),
-    }));
+    {
+        let mut gpu_instance = GPU_INSTANCE
+            .write()
+            .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
+        *gpu_instance = Some(GPU {
+            device: Arc::new(device),
+            adapter: Arc::new(adapter),
+            instance: Arc::new(instance),
+        });
+    }
+
+    {
+        let mut gpu_queue = GPU_QUEUE
+            .write()
+            .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
+        *gpu_queue = Some(GpuQueue {
+            queue: Arc::new(queue),
+        });
+    }
 
     Ok(())
 }
 
 pub fn get_device() -> Result<Arc<Device>, AppError> {
-    let device_cache = CACHED_DEVICE
+    let gpu_instance = GPU_INSTANCE
         .read()
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    device_cache
+    gpu_instance
         .as_ref()
-        .map(|gpu_device| &gpu_device.device)
-        .ok_or(AppError::InstanceInitializationError)
-        .cloned()
+        .map(|gpu| gpu.device.clone())
+        .ok_or(AppError::GPUResourceError(String::from(
+            "GPU device is not available",
+        )))
 }
+
 pub fn get_adapter() -> Result<Arc<Adapter>, AppError> {
-    let device_cache = CACHED_DEVICE
+    let gpu_instance = GPU_INSTANCE
         .read()
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    device_cache
+    gpu_instance
         .as_ref()
-        .map(|gpu_device| &gpu_device.adapter)
-        .ok_or(AppError::InstanceInitializationError)
-        .cloned()
+        .map(|gpu| gpu.adapter.clone())
+        .ok_or(AppError::GPUResourceError(String::from(
+            "GPU adapter is not available",
+        )))
 }
+
 pub fn get_instance() -> Result<Arc<Instance>, AppError> {
-    let device_cache = CACHED_DEVICE
+    let gpu_instance = GPU_INSTANCE
         .read()
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    device_cache
+    gpu_instance
         .as_ref()
-        .map(|gpu_device| &gpu_device.instance)
-        .ok_or(AppError::InstanceInitializationError)
-        .cloned()
+        .map(|gpu| gpu.instance.clone())
+        .ok_or(AppError::GPUResourceError(String::from(
+            "GPU instance is not available",
+        )))
 }
 
 pub fn get_queue() -> Result<Arc<Queue>, AppError> {
-    let queue_cache = CACHED_QUEUE
+    let gpu_queue = GPU_QUEUE
         .read()
         .map_err(|e| AppError::LockAcquisitionFailure(e.to_string()))?;
-    queue_cache
+    gpu_queue
         .as_ref()
-        .map(|gpu_queue| &gpu_queue.queue)
-        .ok_or(AppError::InstanceInitializationError)
-        .cloned()
+        .map(|queue| queue.queue.clone())
+        .ok_or(AppError::GPUResourceError(String::from(
+            "GPU queue is not available",
+        )))
 }

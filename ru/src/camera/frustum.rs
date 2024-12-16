@@ -1,45 +1,86 @@
 use std::f32::EPSILON;
 
-use cgmath::{InnerSpace, Matrix4, Vector3};
+use cgmath::{InnerSpace, Matrix4, Vector3, Zero};
 
-use crate::{log_error, log_info};
+use super::handler::CameraHandler;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Frustum {
     pub planes: [Plane; 6],
 }
 
 impl Frustum {
-    pub fn from_view_projection_matrix(vp_matrix: Matrix4<f32>) -> Self {
-        let vp_array = vp_matrix.into();
-        let mut planes = [
-            Self::extract_plane(&vp_array, 0, 3, 0),  // Left
-            Self::extract_plane(&vp_array, 1, 3, 0),  // Right
-            Self::extract_plane(&vp_array, 2, 3, 0),  // Bottom
-            Self::extract_plane(&vp_array, 3, 3, 0),  // Top
-            Self::extract_plane(&vp_array, 2, 3, -1), // Near
-            Self::extract_plane(&vp_array, 2, 3, 1),  // Far
-        ];
+    pub fn from_camera_handler(handler: &CameraHandler) -> Frustum {
+        Frustum::from_view_projection_matrix(handler.view_projection_matrix())
+    }
 
-        for plane in &mut planes {
-            plane.normalize();
-        }
+    pub fn from_view_projection_matrix(vp_matrix: Matrix4<f32>) -> Self {
+        let planes = Self::extract_planes(vp_matrix);
 
         Frustum { planes }
     }
 
-    fn extract_plane(vp_matrix: &[[f32; 4]; 4], row: usize, _column: usize, sign: i32) -> Plane {
-        Plane {
-            normal: Vector3::new(
-                vp_matrix[0][3] + sign as f32 * vp_matrix[0][row],
-                vp_matrix[1][3] + sign as f32 * vp_matrix[1][row],
-                vp_matrix[2][3] + sign as f32 * vp_matrix[2][row],
-            ),
-            distance: vp_matrix[3][3] + sign as f32 * vp_matrix[3][row],
+    pub fn extract_planes(vp_matrix: Matrix4<f32>) -> [Plane; 6] {
+        let vp: [[f32; 4]; 4] = vp_matrix.into();
+        let mut planes = [
+            Self::extract_plane(&vp, 0, 3, 1),  // Left
+            Self::extract_plane(&vp, 0, 3, -1), // Right
+            Self::extract_plane(&vp, 1, 3, 1),  // Bottom
+            Self::extract_plane(&vp, 1, 3, -1), // Top
+            Self::extract_plane(&vp, 2, 3, 1),  // Near
+            Self::extract_plane(&vp, 2, 3, -1), // Far
+        ];
+        for plane in &mut planes {
+            plane.normalize();
         }
+        planes
+    }
+    pub fn update_planes(&mut self, vp_matrix: Matrix4<f32>) {
+        self.planes = Frustum::extract_planes(vp_matrix);
+    }
+    fn extract_plane(vp_matrix: &[[f32; 4]; 4], row: usize, column: usize, sign: i32) -> Plane {
+        Plane::new(
+            Vector3::new(
+                vp_matrix[column][3] + sign as f32 * vp_matrix[column][row],
+                vp_matrix[1][column] + sign as f32 * vp_matrix[1][row],
+                vp_matrix[2][column] + sign as f32 * vp_matrix[2][row],
+            ),
+            vp_matrix[3][column] + sign as f32 * vp_matrix[3][row],
+        )
+    }
+    pub fn contains_aabb(&self, min: Vector3<f32>, max: Vector3<f32>) -> bool {
+        for plane in &self.planes {
+            let corners = [
+                Vector3::new(min.x, min.y, min.z),
+                Vector3::new(max.x, min.y, min.z),
+                Vector3::new(min.x, max.y, min.z),
+                Vector3::new(max.x, max.y, min.z),
+                Vector3::new(min.x, min.y, max.z),
+                Vector3::new(max.x, min.y, max.z),
+                Vector3::new(min.x, max.y, max.z),
+                Vector3::new(max.x, max.y, max.z),
+            ];
+
+            if corners
+                .iter()
+                .all(|corner| plane.distance_to_point(*corner) < 0.0)
+            {
+                return false;
+            }
+        }
+        true
     }
 
+    pub fn is_in_front_of_camera(
+        &self,
+        camera_position: Vector3<f32>,
+        camera_forward: Vector3<f32>,
+        object_position: Vector3<f32>,
+    ) -> bool {
+        let to_object = object_position - camera_position;
+        camera_forward.dot(to_object) > 0.0
+    }
     pub fn contains_sphere(&self, center: Vector3<f32>, radius: f32) -> bool {
         for plane in &self.planes {
             if plane.distance_to_point(center) < -radius {
@@ -48,63 +89,53 @@ impl Frustum {
         }
         true
     }
-
-    pub fn corners(&self) -> [Vector3<f32>; 8] {
-        let planes = &self.planes;
-        [
-            Self::intersect_planes(&planes[0], &planes[2], &planes[4]), // Near bottom-left
-            Self::intersect_planes(&planes[1], &planes[2], &planes[4]), // Near bottom-right
-            Self::intersect_planes(&planes[1], &planes[3], &planes[4]), // Near top-right
-            Self::intersect_planes(&planes[0], &planes[3], &planes[4]), // Near top-left
-            Self::intersect_planes(&planes[0], &planes[2], &planes[5]), // Far bottom-left
-            Self::intersect_planes(&planes[1], &planes[2], &planes[5]), // Far bottom-right
-            Self::intersect_planes(&planes[1], &planes[3], &planes[5]), // Far top-right
-            Self::intersect_planes(&planes[0], &planes[3], &planes[5]), // Far top-left
-        ]
+    pub fn calculate_instance_radius(scale: Vector3<f32>) -> f32 {
+        scale.magnitude() / 2.0
     }
 
-    fn intersect_planes(p1: &Plane, p2: &Plane, p3: &Plane) -> Vector3<f32> {
-        let n1 = p1.normal;
-        let n2 = p2.normal;
-        let n3 = p3.normal;
-        let d1 = p1.distance;
-        let d2 = p2.distance;
-        let d3 = p3.distance;
-
-        let cross_n2_n3 = n2.cross(n3);
-        let cross_n3_n1 = n3.cross(n1);
-        let cross_n1_n2 = n1.cross(n2);
-
-        let numerator = (cross_n2_n3 * d1) + (cross_n3_n1 * d2) + (cross_n1_n2 * d3);
-        let denominator = n1.dot(cross_n2_n3);
-
-        if denominator.abs() < EPSILON {
-            log_info!("Denominator near zero: {:?}", denominator);
-            log_error!("Intersection calculation failed due to near-zero denominator");
-            return Vector3::new(0.0, 0.0, 0.0);
+    pub fn contains(&self, volume: &BoundingVolume) -> bool {
+        match volume {
+            BoundingVolume::Sphere { center, radius } => self.contains_sphere(*center, *radius),
+            BoundingVolume::AABB { min, max } => self.contains_aabb(*min, *max),
         }
-
-        numerator / denominator
     }
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Plane {
     pub normal: Vector3<f32>,
     pub distance: f32,
 }
 
 impl Plane {
-    pub fn normalize(&mut self) {
-        let magnitude = self.normal.magnitude();
-        if magnitude > EPSILON {
-            self.normal /= magnitude;
-            self.distance /= magnitude;
-        }
+    pub fn new(normal: Vector3<f32>, distance: f32) -> Self {
+        let mut plane = Plane { normal, distance };
+        plane.normalize();
+        plane
     }
-
     pub fn distance_to_point(&self, point: Vector3<f32>) -> f32 {
         self.normal.dot(point) + self.distance
     }
+    pub fn normalize(&mut self) {
+        let magnitude = self.normal.magnitude();
+        if magnitude > 1e-6 {
+            self.normal /= magnitude;
+            self.distance /= magnitude;
+        } else {
+            self.normal = Vector3::zero();
+            self.distance = 0.0;
+        }
+    }
+}
+
+pub enum BoundingVolume {
+    Sphere {
+        center: Vector3<f32>,
+        radius: f32,
+    },
+    AABB {
+        min: Vector3<f32>,
+        max: Vector3<f32>,
+    },
 }

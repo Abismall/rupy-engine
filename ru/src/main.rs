@@ -3,14 +3,14 @@ use std::sync::Arc;
 use crossbeam::channel::{self, Receiver, Sender};
 
 use rupy::{
-    app::{app::Rupy, flags::BitFlags},
+    app::app::Rupy,
     core::{
         error::AppError,
+        events::{
+            proxy::{EventBusProxy, EventProxy, EventProxyTrait},
+            RupyAppEvent,
+        },
         worker::{RupyWorker, WorkerTask},
-    },
-    events::{
-        proxy::{EventBusProxy, EventProxy, EventProxyTrait},
-        RupyAppEvent,
     },
     rupyLogger::factory::LogFactory,
 };

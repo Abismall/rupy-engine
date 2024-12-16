@@ -1,7 +1,8 @@
 use std::ops::Range;
 
 use crate::{
-    core::{cache::ComponentCacheKey, error::AppError},
+    core::cache::CacheKey,
+    core::error::AppError,
     ecs::components::{mesh::model::Mesh, model::model::Model},
 };
 
@@ -16,19 +17,23 @@ pub trait BufferCreator {
     ) -> wgpu::Buffer;
 }
 
-pub trait Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static>;
-}
 pub trait RenderPassDraw<'a> {
     fn draw_model(
         &mut self,
         model: &Model,
         bind_groups: &[&'a wgpu::BindGroup],
+        instances: &Option<Range<u32>>,
+        buffer_manager: &BufferManager,
+        mesh_manager: &MeshManager,
+    );
+    fn draw_models(
+        &mut self,
+        models: &Vec<Model>,
+        bind_groups: &[&'a wgpu::BindGroup],
         instances: Option<Range<u32>>,
         buffer_manager: &BufferManager,
         mesh_manager: &MeshManager,
     );
-
     fn draw_mesh(
         &mut self,
         vertex_buffer: &wgpu::Buffer,
@@ -46,12 +51,12 @@ pub trait RenderPassDraw<'a> {
     );
 }
 pub trait Cache<R> {
-    fn get(&self, id: ComponentCacheKey) -> Option<&R>;
-    fn contains(&self, id: ComponentCacheKey) -> bool;
-    fn get_mut(&mut self, id: ComponentCacheKey) -> Option<&mut R>;
-    fn get_or_create<F>(&mut self, id: ComponentCacheKey, create_fn: F) -> Result<&mut R, AppError>
+    fn get(&self, id: &CacheKey) -> Option<&R>;
+    fn contains(&self, id: &CacheKey) -> bool;
+    fn get_mut(&mut self, id: &CacheKey) -> Option<&mut R>;
+    fn get_or_create<F>(&mut self, id: CacheKey, create_fn: F) -> Result<&mut R, AppError>
     where
         F: FnOnce() -> Result<R, AppError>;
-    fn put(&mut self, id: ComponentCacheKey, resource: R) -> Result<(), AppError>;
-    fn remove(&mut self, id: ComponentCacheKey);
+    fn put(&mut self, id: CacheKey, resource: R);
+    fn remove(&mut self, id: &CacheKey);
 }

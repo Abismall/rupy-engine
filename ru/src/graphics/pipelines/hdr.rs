@@ -1,13 +1,16 @@
 use crate::graphics::{
-    pipelines::setup::create_render_pipeline,
-    textures::{BindableTexture, Texture},
+    binding::{hdr::create_hdr_pipeline_bind_group, BindGroupLayouts},
+    shaders::manager::ShaderManager,
+    textures::{cube_texture::CubeTexture, BindableTexture, Texture},
 };
 use image::codecs::hdr::HdrDecoder;
 use std::io::Cursor;
-use wgpu::{Operations, TextureFormat};
+use wgpu::TextureFormat;
 use winit::dpi::PhysicalSize;
 
 use crate::core::error::AppError;
+
+use super::common::{create_render_pipeline, PipelineBase};
 
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -16,137 +19,109 @@ pub struct HdrPipeline {
     width: u32,
     height: u32,
     format: wgpu::TextureFormat,
-    layout: wgpu::BindGroupLayout,
 }
 
-impl HdrPipeline {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
-        let width = config.width;
-        let height = config.height;
+impl PipelineBase for HdrPipeline {
+    fn create_layout(
+        device: &wgpu::Device,
+        bind_group_layouts: &BindGroupLayouts,
+    ) -> wgpu::PipelineLayout {
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("hdr_pipeline_layout"),
+            bind_group_layouts: &[&bind_group_layouts.hdr_pipeline_bind_group_layout],
+            push_constant_ranges: &[],
+        })
+    }
+
+    fn new(
+        device: &wgpu::Device,
+        format: TextureFormat,
+        width: u32,
+        height: u32,
+        shader_manager: &mut ShaderManager,
+        bind_group_layouts: &BindGroupLayouts,
+    ) -> Self {
+        let layout = Self::create_layout(device, &bind_group_layouts);
+
+        let pipeline = create_render_pipeline(
+            device,
+            &layout,
+            format.add_srgb_suffix(),
+            None,
+            &[],
+            wgpu::PrimitiveTopology::TriangleList,
+            "effects/tone_mapping.wgsl",
+            shader_manager,
+        )
+        .expect("Hdr pipeline");
 
         let texture = Texture::create_2d_texture(
             device,
             width,
             height,
-            config.format,
+            format,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::FilterMode::Nearest,
-            Some("Hdr::texture"),
+            Some("hdr_texture"),
         );
 
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Hdr::layout"),
-            entries: &[
-                // This is the HDR texture
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Hdr::bind_group"),
-            layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                },
-            ],
-        });
-
-        let shader = wgpu::include_wgsl!("../../assets/shaders/effects/tone_mapping.wgsl");
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&layout],
-            push_constant_ranges: &[],
-        });
-
-        let pipeline = create_render_pipeline(
-            &device,
-            &pipeline_layout,
-            config.format.add_srgb_suffix(),
-            None,
-            &[],
-            wgpu::PrimitiveTopology::TriangleList,
-            shader,
+        let bind_group = create_hdr_pipeline_bind_group(
+            device,
+            &bind_group_layouts.hdr_pipeline_bind_group_layout,
+            &texture,
         );
 
         Self {
             pipeline,
-            bind_group,
-            layout,
             texture,
             width,
             height,
-            format: config.format,
+            format,
+            bind_group,
         }
     }
 
-    pub fn resize(
+    fn resize<P: winit::dpi::Pixel>(
         &mut self,
         device: &wgpu::Device,
-        size: PhysicalSize<u32>,
-        format: TextureFormat,
+        new_size: PhysicalSize<P>,
+        bind_group_layouts: &BindGroupLayouts,
     ) {
+        self.width = new_size.width.cast();
+        self.height = new_size.height.cast();
+
         self.texture = Texture::create_2d_texture(
             device,
-            size.width,
-            size.height,
-            format,
+            self.width,
+            self.height,
+            self.format,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::FilterMode::Nearest,
-            Some("Hdr::texture"),
+            Some("hdr_texture"),
         );
-        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Hdr::bind_group"),
-            layout: &self.layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.texture.sampler),
-                },
-            ],
-        });
-        self.width = size.width;
-        self.height = size.height;
+
+        self.bind_group = create_hdr_pipeline_bind_group(
+            device,
+            &bind_group_layouts.hdr_pipeline_bind_group_layout,
+            &self.texture,
+        );
     }
 
-    pub fn view(&self) -> &wgpu::TextureView {
+    fn view(&self) -> &wgpu::TextureView {
         &self.texture.view
     }
 
-    pub fn format(&self) -> wgpu::TextureFormat {
+    fn format(&self) -> wgpu::TextureFormat {
         self.format
     }
 
-    pub fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
+    fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Hdr::process"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &output,
+                view: output,
                 resolve_target: None,
-                ops: Operations {
+                ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
@@ -155,12 +130,12 @@ impl HdrPipeline {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }
-
 pub struct HdrLoader {
     texture_format: wgpu::TextureFormat,
     equirect_layout: wgpu::BindGroupLayout,
@@ -229,7 +204,7 @@ impl HdrLoader {
         data: &[u8],
         dst_size: u32,
         label: Option<&str>,
-    ) -> Result<Texture, AppError> {
+    ) -> Result<CubeTexture, AppError> {
         let hdr_decoder = HdrDecoder::new(Cursor::new(data))?;
         let meta = hdr_decoder.metadata();
 
@@ -245,15 +220,6 @@ impl HdrLoader {
             )?;
             pixels
         };
-        #[cfg(target_arch = "wasm32")]
-        let pixels = hdr_decoder
-            .read_image_native()?
-            .into_iter()
-            .map(|pix| {
-                let rgb = pix.to_hdr();
-                [rgb.0[0], rgb.0[1], rgb.0[2], 1.0f32]
-            })
-            .collect::<Vec<_>>();
 
         let src = Texture::create_2d_texture(
             device,
@@ -281,7 +247,7 @@ impl HdrLoader {
             src.size,
         );
 
-        let dst = Texture::create_2d(
+        let dst = CubeTexture::create_2d(
             device,
             dst_size,
             dst_size,

@@ -1,142 +1,87 @@
-use glyphon::{PrepareError, RenderError};
-use image::ImageError;
-use log::SetLoggerError;
-use std::env::VarError;
+use super::{events::RupyAppEvent, worker::WorkerTask};
 use std::io;
-
 use thiserror::Error;
-use wgpu::{CreateSurfaceError, SurfaceError};
-use winit::error::{EventLoopError, OsError};
-use winit::raw_window_handle::HandleError;
-
-use crate::core::worker::WorkerTask;
-use crate::events::RupyAppEvent;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Tobj load error {0}")]
-    TobjLoadError(#[from] tobj::LoadError),
-
-    #[error("Resource not found")]
-    ResourceNotFound,
+    // ECS-related errors
+    #[error("ComponentDowncastError: {0}")]
+    WorldQueryError(String),
+    // Resource-related errors
+    #[error("Resource creation failed: {0}")]
+    ResourceCreationFailed(String),
+    #[error("Resource not found: {0}")]
+    ResourceNotFound(String),
     #[error("Resource already exists")]
     DuplicateResource,
+    #[error("Dimension mismatch")]
+    DimensionMismatch,
+
+    // Scene-related errors
     #[error("Scene error: {0}")]
     CreateSceneError(String),
-    #[error("Invalid mesh data error: {0}")]
-    InvalidMeshData(String),
-    #[error("Component error: {0}")]
-    ComponentError(String),
-
     #[error("Scene not found: {0}")]
     SceneNotFoundError(String),
 
+    // Material-related errors
     #[error("Material type error: {0}")]
     MaterialTypeError(String),
 
+    // Configuration-related errors
+    #[error("Config error: {0}")]
+    ConfigError(String),
     #[error("Toml error: {0}")]
     TomlError(#[from] toml::de::Error),
-
     #[error("Serde yaml error: {0}")]
     SerdeYamlError(#[from] serde_yaml::Error),
 
-    #[error("Config error: {0}")]
-    ConfigError(String),
-
-    #[error("Pipeline not found error: {0}")]
-    PipelineNotFoundError(String),
-
+    // Shader-related errors
     #[error("Failed to parse shader source: {0}")]
     ShaderParseError(#[from] naga::front::wgsl::ParseError),
 
-    #[error("Var error: {0}")]
-    VarError(#[from] VarError),
+    // I/O and file-related errors
+    #[error("io::Error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("FileNotFoundError: {0}")]
+    FileNotFoundError(String),
+    #[error("image::ImageError: {0}")]
+    ImageError(#[from] image::ImageError),
+    #[error("walkdir::Error: {0}")]
+    WalkDirError(#[from] walkdir::Error),
+    #[error("tobj::LoadError {0}")]
+    TobjLoadError(#[from] tobj::LoadError),
 
-    #[error("Failed to execute task.")]
+    // Logging and system-related errors
+    #[error("Logger setup error: {0}")]
+    LoggerSetupError(#[from] log::SetLoggerError),
+    #[error("OS error: {0}")]
+    OsError(#[from] winit::error::OsError),
+    #[error("crossbeam::channel::SendError<RupyAppEvent>: {0}")]
+    CrossBeamChannelSendEventError(#[from] crossbeam::channel::SendError<RupyAppEvent>),
+    #[error("crossbeam::channel::SendError<WorkerTask>: {0}")]
+    CrossBeamChannelSendTaskError(#[from] crossbeam::channel::SendError<WorkerTask>),
+    #[error("EventLoopError: {0}")]
+    EventLoopError(#[from] winit::error::EventLoopError),
+    // GPU and rendering errors
+    #[error("wgpu::CreateSurfaceError: {0}")]
+    CreateSurfaceError(#[from] wgpu::CreateSurfaceError),
+    #[error("wgpu::SurfaceError: {0}")]
+    SurfaceError(#[from] wgpu::SurfaceError),
+    #[error("wgpu::RequestDeviceError: {0}")]
+    RequestDeviceError(#[from] wgpu::RequestDeviceError),
+    #[error("GPUResourceError: {0}")]
+    GPUResourceError(String),
+
+    #[error("RenderError {0}")]
+    RenderError(#[from] glyphon::RenderError),
+
+    // Task-related errors
+    #[error("TaskJoinError: {0}")]
     TaskJoinError(#[from] tokio::task::JoinError),
 
-    #[error("Channel error: {0}")]
-    ChannelError(String),
-
-    #[error("Failed to load texture file")]
-    TextureFileLoadError,
-
-    #[error("Surface was lost or has not been initialized")]
-    SurfaceInitializationError,
-
-    #[error("File not found: {0}")]
-    FileNotFoundError(String),
-    #[error("Buffer not found: {0}")]
-    BufferNotFoundError(String),
-    #[error("I/O error: {0}")]
-    IoError(#[from] io::Error),
-
-    #[error("Logger setup error: {0}")]
-    LoggerSetupError(#[from] SetLoggerError),
-
-    #[error("No surface available")]
-    NoSurfaceAvailable,
-
-    #[error("No texture provided.")]
-    TextureNotFound,
-
-    #[error("Image format is not supported: {0}")]
-    UnsupportedImageFormat(String),
-
-    #[error("No sampler provided.")]
-    SamplerNotFound,
-
-    #[error("Image error: {0}")]
-    ImageError(#[from] ImageError),
-
-    #[error("Error traversing directories: {0}")]
-    WalkDirError(#[from] walkdir::Error),
-
-    #[error("Failed to initialize the GPU instance.")]
-    InstanceInitializationError,
-
-    #[error("Failed to find an appropriate adapter.")]
-    AdapterRequestError,
-
+    // Misc
     #[error("Failed to acquire RwLock: {0}")]
     LockAcquisitionFailure(String),
-
-    #[error("Failed to send command into queue.")]
-    TaskQueueSendError(#[from] crossbeam::channel::SendError<WorkerTask>),
-
-    #[error("Failed to send command into queue.")]
-    EventSendError(#[from] crossbeam::channel::SendError<RupyAppEvent>),
-
-    #[error("GPU device creation failed: {0}")]
-    RequestDeviceError(#[from] wgpu::RequestDeviceError),
-
-    #[error("Surface creation error: {0}")]
-    CreateSurfaceError(#[from] CreateSurfaceError),
-
-    #[error("Surface error: {0}")]
-    SurfaceError(#[from] SurfaceError),
-
-    #[error("Surface configuration error.")]
-    SurfaceConfigurationError,
-
-    #[error("Bind group entry error: Bind group entries cannot be empty.")]
-    NoBindGroupEntryError,
-
-    #[error("No active window.")]
-    NoActiveWindowError,
-
-    #[error("Event loop error: {0}")]
-    EventLoopError(#[from] EventLoopError),
-
-    #[error("OS error: {0}")]
-    OsError(#[from] OsError),
-
-    #[error("Raw window handle error: {0}")]
-    RawWindowHandleError(#[from] HandleError),
-
-    #[error("Render error: {0}")]
-    RenderError(#[from] RenderError),
-
-    #[error("GlyphonManager prepare error: {0}")]
-    GlyphonPrepareError(#[from] PrepareError),
+    #[error("Var error: {0}")]
+    VarError(#[from] std::env::VarError),
 }

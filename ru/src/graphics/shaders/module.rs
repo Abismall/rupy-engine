@@ -1,50 +1,44 @@
-use std::path::Path;
-
-use wgpu::{ShaderModule, ShaderModuleDescriptor};
+use std::path::{Path, PathBuf};
 
 use crate::core::{error::AppError, files::FileSystem};
+use wgpu::ShaderModule;
 
 #[derive(Debug)]
 pub struct RupyShader {
-    pub module: ShaderModule,
-    pub vs_main: String,
-    pub fs_main: String,
     pub path: String,
+    pub module: ShaderModule,
+    pub source: String,
+}
+impl RupyShader {
+    pub fn load(device: &wgpu::Device, path: &str) -> Result<RupyShader, AppError> {
+        let (module, source) = RupyShader::create_shader_module(device, path)?;
+        Ok(RupyShader {
+            path: String::from(path),
+            module,
+            source,
+        })
+    }
+
+    pub fn create_shader_module(
+        device: &wgpu::Device,
+        path: &str,
+    ) -> Result<(wgpu::ShaderModule, std::string::String), AppError> {
+        let shader_path_buf = shader_path(path)?;
+        let src = read_shader_source_from_path(shader_path_buf)?;
+        let source = wgpu::ShaderSource::Wgsl(src.clone().into());
+        let label = Some("Shader Module");
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor { label, source });
+
+        Ok((module, src))
+    }
 }
 
-pub fn read_shader_source_from_path<P: AsRef<Path> + std::fmt::Debug>(
+fn read_shader_source_from_path<P: AsRef<Path> + std::fmt::Debug>(
     path: P,
 ) -> Result<std::string::String, std::io::Error> {
     let source_data_string = FileSystem::read_to_string(path)?;
-
     Ok(source_data_string)
 }
-
-pub fn create_shader_modules(
-    device: &wgpu::Device,
-    vert_path: &str,
-    frag_path: &str,
-) -> Result<
-    (
-        (wgpu::ShaderModule, std::string::String),
-        (wgpu::ShaderModule, std::string::String),
-    ),
-    AppError,
-> {
-    let (vertex_shader_src, fragment_shader_src) = (
-        read_shader_source_from_path(vert_path)?,
-        read_shader_source_from_path(frag_path)?,
-    );
-    let vert_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Shader Module"),
-        source: wgpu::ShaderSource::Wgsl(vertex_shader_src.clone().into()),
-    });
-    let frag_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Shader Module"),
-        source: wgpu::ShaderSource::Wgsl(fragment_shader_src.clone().into()),
-    });
-    Ok((
-        (vert_module, vertex_shader_src),
-        (frag_module, fragment_shader_src),
-    ))
+fn shader_path(name: &str) -> Result<PathBuf, AppError> {
+    FileSystem::get_shader_file_path(name)
 }

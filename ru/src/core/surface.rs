@@ -7,7 +7,12 @@ pub struct RenderSurface<'a> {
 }
 
 impl<'a> RenderSurface<'a> {
-    pub fn new(surface: Surface<'a>, size: PhysicalSize<u32>, adapter: &wgpu::Adapter) -> Self {
+    pub fn new(
+        surface: Surface<'a>,
+        size: PhysicalSize<u32>,
+        adapter: &wgpu::Adapter,
+        device: &wgpu::Device,
+    ) -> Self {
         let surface_caps = surface.get_capabilities(&adapter);
 
         let surface_format = surface_caps
@@ -26,13 +31,21 @@ impl<'a> RenderSurface<'a> {
             view_formats: vec![surface_format.add_srgb_suffix()],
             desired_maximum_frame_latency: 2,
         };
+        surface.configure(device, &config);
         Self { surface, config }
     }
-
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) -> bool {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
+    pub fn configure(&mut self, device: &wgpu::Device) {
+        self.surface.configure(device, &self.config)
+    }
+    pub fn update_config_size<P: winit::dpi::Pixel>(
+        &mut self,
+        new_size: winit::dpi::PhysicalSize<P>,
+    ) -> bool {
+        let width: u32 = new_size.width.cast();
+        let height: u32 = new_size.height.cast();
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
             true
         } else {
             false

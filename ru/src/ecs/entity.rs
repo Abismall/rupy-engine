@@ -46,7 +46,7 @@ impl EntityManager {
             .get(entity.id as usize)
             .map_or(false, |&gen| gen == entity.generation)
     }
-    pub fn into_iter(self) -> std::vec::IntoIter<Entity> {
-        self.entities.into_iter()
+    pub fn get_entities(&self) -> &Vec<Entity> {
+        &self.entities
     }
 }

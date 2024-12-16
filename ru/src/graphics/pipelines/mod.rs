@@ -1,77 +1,7 @@
+pub mod common;
 pub mod hdr;
 pub mod manager;
-pub mod setup;
-pub fn get_pipeline_label(
-    primitive: &PrimitiveType,
-    shading: &ShadingType,
-    depth: &DepthType,
-) -> String {
-    format!("[{:?}, {:?}, {:?}]", primitive, shading, depth)
-}
-#[derive(Debug)]
-pub struct PipelineDescriptor {
-    pub primitive_type: PrimitiveType,
-    pub shading_type: ShadingType,
-    pub depth_type: DepthType,
-}
 
-impl PipelineDescriptor {
-    pub fn new(
-        primitive_type: PrimitiveType,
-        shading_type: ShadingType,
-        depth_type: DepthType,
-    ) -> Self {
-        Self {
-            primitive_type,
-            shading_type,
-            depth_type,
-        }
-    }
-}
-
-pub fn render_pipeline(
-    device: &wgpu::Device,
-    name: &str,
-    uniform_layout: &wgpu::BindGroupLayout,
-    instance_layout: &wgpu::BindGroupLayout,
-    texture_layout: &wgpu::BindGroupLayout,
-    vertex_shader: &wgpu::ShaderModule,
-    fragment_shader: &wgpu::ShaderModule,
-    depth_stencil: Option<&wgpu::DepthStencilState>,
-    color_target: ColorTargetState,
-    primitive_type: PrimitiveState,
-) -> wgpu::RenderPipeline {
-    let layout = &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some(name),
-        bind_group_layouts: &[&uniform_layout, &instance_layout, &texture_layout],
-        push_constant_ranges: &[],
-    });
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(name),
-        layout: Some(layout),
-        vertex: wgpu::VertexState {
-            module: vertex_shader,
-            entry_point: WGSL_VERTEX_MAIN_DEFAULT,
-            buffers: &[VertexTexture::desc()],
-            compilation_options: Default::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: fragment_shader,
-            entry_point: WGSL_FRAGMENT_MAIN_DEFAULT,
-            targets: &[Some(color_target)],
-            compilation_options: Default::default(),
-        }),
-        primitive: primitive_type,
-        multisample: wgpu::MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        multiview: None,
-        cache: Default::default(),
-        depth_stencil: depth_stencil.cloned(),
-    })
-}
 #[derive(Debug, PartialEq)]
 pub enum PrimitiveType {
     Line,
@@ -95,11 +25,6 @@ use wgpu::{
     PrimitiveTopology, TextureFormat,
 };
 
-use crate::{
-    graphics::model::VertexTexture,
-    prelude::constant::{WGSL_FRAGMENT_MAIN_DEFAULT, WGSL_VERTEX_MAIN_DEFAULT},
-};
-
 pub enum PrimitiveStateConfig {
     TriangleList,
     TriangleStrip,
@@ -120,31 +45,31 @@ impl PrimitiveStateConfig {
             PrimitiveStateConfig::TriangleList => PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             PrimitiveStateConfig::TriangleStrip => PrimitiveState {
                 topology: PrimitiveTopology::TriangleStrip,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             PrimitiveStateConfig::LineList => PrimitiveState {
                 topology: PrimitiveTopology::LineList,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             PrimitiveStateConfig::LineStrip => PrimitiveState {
                 topology: PrimitiveTopology::LineStrip,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             PrimitiveStateConfig::PointList => PrimitiveState {
                 topology: PrimitiveTopology::PointList,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 ..Default::default()
             },
             PrimitiveStateConfig::Custom {

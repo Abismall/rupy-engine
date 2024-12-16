@@ -1,5 +1,9 @@
+pub mod audio;
 pub mod cache;
 pub mod error;
+pub mod events;
 pub mod files;
+pub mod input;
+pub mod logging;
 pub mod surface;
 pub mod worker;
