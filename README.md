@@ -1,5 +1,5 @@
 ***"There are currently 5 games written in rust... and 50 game engines"***
-
+![](https://github.com/Abicodexi/rupy-engine/blob/main/culling.gif)
 ## Acknowledgements
 
 A special thanks to all the content creators, developers, and contributors who share their knowledge freely. While there are too many to list, I would like to mention a few:
